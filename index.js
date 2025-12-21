@@ -4,21 +4,20 @@ const {
     Client,
     GatewayIntentBits,
     Partials,
-    EmbedBuilder,
-    PermissionsBitField
+    EmbedBuilder
 } = require('discord.js');
 
+// Create client without privileged intents
 const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.DirectMessages
+        GatewayIntentBits.Guilds,       // Needed for slash commands and guild info
+        GatewayIntentBits.DirectMessages // Needed for sending DMs
     ],
-    partials: [Partials.Channel]
+    partials: [Partials.Channel] // Required for DMs
 });
 
 /* =======================
-   DATA
+   DATA FILES
 ======================= */
 let alliances = fs.existsSync('./alliances.json')
     ? JSON.parse(fs.readFileSync('./alliances.json'))
@@ -29,7 +28,7 @@ let strikes = fs.existsSync('./staffStrikes.json')
     : [];
 
 /* =======================
-   READY
+   READY EVENT
 ======================= */
 client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
@@ -55,7 +54,11 @@ client.on('interactionCreate', async interaction => {
             .setDescription(message)
             .setColor('Blue');
 
-        await user.send({ embeds: [embed] });
+        try {
+            await user.send({ embeds: [embed] });
+        } catch {
+            return interaction.editReply('❌ Could not send DM to that user.');
+        }
 
         const log = guild.channels.cache.find(c => c.name === 'dm-logs');
         if (log) log.send({ embeds: [embed] });
@@ -120,9 +123,13 @@ client.on('interactionCreate', async interaction => {
             }
 
             if (action === 'terminate') {
-                const gm = await guild.members.fetch(target.id);
-                await gm.kick(reason);
-                return interaction.editReply(`❌ ${target.tag} terminated`);
+                try {
+                    const gm = await guild.members.fetch(target.id);
+                    await gm.kick(reason);
+                    return interaction.editReply(`❌ ${target.tag} terminated`);
+                } catch {
+                    return interaction.editReply('❌ Could not terminate that member.');
+                }
             }
         }
 
@@ -148,4 +155,7 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+/* =======================
+   LOGIN
+======================= */
 client.login(process.env.TOKEN);
