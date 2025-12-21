@@ -150,24 +150,32 @@ client.on('interactionCreate', async interaction => {
         const targetMember = await guild.members.fetch(target.id);
 
         if (sub === 'discipline') {
-            // Compute strike number
             const userStrikes = strikes.filter(s => s.user === target.id);
             const strikeNumber = userStrikes.length + (action === 'add' ? 1 : 0);
 
-            // DM Embed
-            const dmEmbed = new EmbedBuilder()
-                .setTitle('**Strike Notice**')
-                .setColor('Red')
-                .setDescription(`> Greetings, <@${target.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your **${strikeNumber}${strikeNumber === 1 ? 'st' : strikeNumber === 2 ? 'nd' : 'th'} strike.**\n\n> 🗒️ **Reason:** *${reason}*\n\nIf you feel like this was false or inaccurate please *open a ticket*.\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
+            // Decide DM content
+            let dmEmbed;
+            if (action === 'add') {
+                dmEmbed = new EmbedBuilder()
+                    .setTitle('**Strike Notice**')
+                    .setColor('Red')
+                    .setDescription(`> Greetings, <@${target.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your **${strikeNumber}${strikeNumber === 1 ? 'st' : strikeNumber === 2 ? 'nd' : 'th'} strike.**\n\n> 🗒️ **Reason:** *${reason}*\n\nIf you feel like this was false or inaccurate please *open a ticket*.\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
+            } else {
+                const typeText = action === 'kick' ? 'kick' : 'removal';
+                dmEmbed = new EmbedBuilder()
+                    .setTitle('**Notice**')
+                    .setColor('Green')
+                    .setDescription(`> Greetings, <@${target.id}>\n\nYour ${typeText} has been **removed** at Kavià Cafe.\n\n> 🗒️ **Reason:** *${reason}*\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
+            }
 
             try { await target.send({ embeds: [dmEmbed] }); } catch {}
 
-            // Log in staff-discipline channel
+            // Log in staff-discipline
             const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
             if (logChannel) {
                 const logEmbed = new EmbedBuilder()
                     .setTitle('📌 Staff Discipline Log')
-                    .setColor('Orange')
+                    .setColor(action === 'add' ? 'Orange' : 'Green')
                     .addFields(
                         { name: 'Member', value: `<@${target.id}>`, inline: true },
                         { name: 'Action', value: action, inline: true },
@@ -179,7 +187,7 @@ client.on('interactionCreate', async interaction => {
                 logChannel.send({ embeds: [logEmbed] });
             }
 
-            // Perform action
+            // Apply the action
             if (action === 'add') {
                 strikes.push({
                     user: target.id,
