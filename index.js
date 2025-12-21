@@ -68,20 +68,22 @@ client.on('interactionCreate', async interaction => {
 
     /* ===== /alliance ===== */
     if (commandName === 'alliance') {
-        if (options.getSubcommand() === 'add') {
+        const sub = options.getSubcommand();
+
+        if (sub === 'add') {
             alliances.push({
                 group: options.getString('group'),
-                our: options.getString('our_reps'),
-                their: options.getString('their_reps'),
-                discord: options.getString('discord'),
-                roblox: options.getString('roblox')
+                ourReps: options.getString('our_reps'),
+                theirReps: options.getString('their_reps'),
+                dcLink: options.getString('discord'),
+                robloxLink: options.getString('roblox')
             });
 
             fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
             return interaction.editReply('✅ Alliance added');
         }
 
-        if (options.getSubcommand() === 'list') {
+        if (sub === 'list') {
             const embed = new EmbedBuilder()
                 .setTitle('🌐 Current Alliances')
                 .setColor('Green');
@@ -90,10 +92,10 @@ client.on('interactionCreate', async interaction => {
                 embed.addFields({
                     name: a.group,
                     value:
-                        `**Our Reps:** ${a.our}\n` +
-                        `**Their Reps:** ${a.their}\n` +
-                        `🔗 **Discord:** ${a.discord}\n` +
-                        `🔗 **Roblox:** ${a.roblox}`
+                        `**Our Reps:** ${a.ourReps || 'N/A'}\n` +
+                        `**Their Reps:** ${a.theirReps || 'N/A'}\n` +
+                        `🔗 **Discord:** ${a.dcLink || 'N/A'}\n` +
+                        `🔗 **Roblox:** ${a.robloxLink || 'N/A'}`
                 });
             });
 
