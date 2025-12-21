@@ -141,32 +141,65 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'staff') {
         const sub = options.getSubcommand();
         const target = options.getUser('member');
+        const category = options.getString('category');
+        const action = options.getString('action');
+        const reason = options.getString('reason') || 'No reason provided';
+        const gm = await guild.members.fetch(target.id);
 
-        // Discipline: strike or terminate
         if (sub === 'discipline') {
-            const action = options.getString('action');
-            const reason = options.getString('reason');
+            // Only kick if action === 'kick'
+            if (action === 'kick') {
+                // DM the user before kicking
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('📩 You have been kicked')
+                    .setColor('Red')
+                    .addFields(
+                        { name: 'Reason', value: reason },
+                        { name: 'By', value: `<@${member.user.id}>` }
+                    );
 
-            if (action === 'strike') {
-                strikes.push({
-                    user: target.id,
-                    reason,
-                    staff: member.user.tag,
-                    date: new Date().toLocaleString()
-                });
+                try {
+                    await target.send({ embeds: [dmEmbed] });
+                } catch {
+                    console.log(`Could not DM ${target.tag} before kick.`);
+                }
 
-                fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
-                return interaction.editReply('⚠️ Strike added');
+                // Kick the user
+                if (!gm.kickable) {
+                    return interaction.editReply('❌ I cannot kick this member. Check my role and permissions.');
+                }
+
+                await gm.kick(reason);
+                return interaction.editReply(`❌ ${target.tag} has been kicked`);
             }
 
-            if (action === 'terminate') {
-                try {
-                    const gm = await guild.members.fetch(target.id);
-                    await gm.kick(reason);
-                    return interaction.editReply(`❌ ${target.tag} terminated`);
-                } catch {
-                    return interaction.editReply('❌ Could not terminate that member.');
+            // Strike actions
+            if (category === 'Strike') {
+                if (action === 'add') {
+                    strikes.push({
+                        user: target.id,
+                        reason,
+                        staff: member.user.tag,
+                        date: new Date().toLocaleString()
+                    });
+                    fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
+                    return interaction.editReply('⚠️ Strike added');
                 }
+                if (action === 'remove') {
+                    const index = strikes.findIndex(s => s.user === target.id);
+                    if (index === -1) return interaction.editReply('❌ No strikes found to remove.');
+                    strikes.splice(index, 1);
+                    fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
+                    return interaction.editReply('✅ Strike removed');
+                }
+            }
+
+            // Termination or Blacklisted logic
+            if (category === 'Termination') {
+                return interaction.editReply('❌ Terminate action executed (custom logic can go here)');
+            }
+            if (category === 'Blacklisted') {
+                return interaction.editReply('❌ Blacklist action executed (custom logic can go here)');
             }
         }
 
