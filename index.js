@@ -7,6 +7,7 @@ const {
     EmbedBuilder
 } = require('discord.js');
 
+// Initialize client
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -16,49 +17,28 @@ const client = new Client({
     partials: [Partials.Channel]
 });
 
-/* =======================
-   DATA
-======================= */
+// Load data safely
 let alliances = [];
 let strikes = [];
 
-try {
-    if (fs.existsSync('./alliances.json')) {
-        alliances = JSON.parse(fs.readFileSync('./alliances.json'));
-    }
-} catch (err) {
-    console.error("Failed to read alliances.json:", err);
-}
+try { alliances = fs.existsSync('./alliances.json') ? JSON.parse(fs.readFileSync('./alliances.json')) : []; } 
+catch { alliances = []; }
+try { strikes = fs.existsSync('./staffStrikes.json') ? JSON.parse(fs.readFileSync('./staffStrikes.json')) : []; } 
+catch { strikes = []; }
 
-try {
-    if (fs.existsSync('./staffStrikes.json')) {
-        strikes = JSON.parse(fs.readFileSync('./staffStrikes.json'));
-    }
-} catch (err) {
-    console.error("Failed to read staffStrikes.json:", err);
-}
-
-/* =======================
-   READY
-======================= */
+// Ready event
 client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
-    try {
-        client.user.setActivity('Kavia Cafe', { type: 'PLAYING' }).catch(console.error);
-    } catch (err) {
-        console.error("Failed to set status:", err);
-    }
+    client.user.setActivity('Kavia Cafe', { type: 'PLAYING' }).catch(console.error);
 });
 
-/* =======================
-   INTERACTIONS
-======================= */
+// Interaction handler
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
-    await interaction.deferReply({ ephemeral: true }).catch(console.error);
-
     try {
+        await interaction.deferReply({ ephemeral: true });
+
         const { commandName, options, guild, member } = interaction;
 
         /* ===== /dm ===== */
@@ -71,11 +51,7 @@ client.on('interactionCreate', async interaction => {
                 .setColor('Blue')
                 .setDescription(message);
 
-            try {
-                await target.send({ embeds: [embed] });
-            } catch (err) {
-                console.error("Failed to DM user:", err);
-            }
+            await target.send({ embeds: [embed] }).catch(console.error);
 
             const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
             if (logChannel) {
@@ -130,7 +106,6 @@ client.on('interactionCreate', async interaction => {
                 const groupName = options.getString('group');
                 const index = alliances.findIndex(a => a.group === groupName);
                 if (index === -1) return interaction.editReply('❌ Alliance not found.');
-
                 alliances.splice(index, 1);
                 fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
                 return interaction.editReply('✅ Alliance removed');
@@ -159,39 +134,30 @@ client.on('interactionCreate', async interaction => {
             const target = options.getUser('member');
             const action = options.getString('action');
             const reason = options.getString('reason') || 'No reason provided';
-
             const staffChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
 
             if (action === 'add') {
                 let dmEmbed;
-
                 if (category === 'Strike') {
                     const strikeNumber = strikes.filter(s => s.user === target.id).length + 1;
-                    strikes.push({
-                        user: target.id,
-                        reason,
-                        staff: member.user.tag,
-                        date: new Date().toLocaleString()
-                    });
+                    strikes.push({ user: target.id, reason, staff: member.user.tag, date: new Date().toLocaleString() });
                     fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
 
                     dmEmbed = new EmbedBuilder()
                         .setTitle('**Strike Notice**')
                         .setColor('Red')
-                        .setDescription(`> Greetings, <@${target.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your **${strikeNumber}${strikeNumber === 1 ? 'st' : strikeNumber === 2 ? 'nd' : 'th'} strike.**\n\n> 🗒️ **Reason:** *${reason}*\n\nIf you feel like this was false or inaccurate please *open a ticket*.\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
+                        .setDescription(`> Greetings, <@${target.id}>\n\nYou've received a strike. This is your **${strikeNumber}${strikeNumber === 1 ? 'st' : strikeNumber === 2 ? 'nd' : 'th'} strike.**\n\n> 🗒️ **Reason:** *${reason}*\n\nIf you feel this is false, please *open a ticket*.\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
                 } else {
                     dmEmbed = new EmbedBuilder()
                         .setTitle(`**${category} Notice**`)
                         .setColor('Red')
-                        .setDescription(`> Greetings, <@${target.id}>\n\nYou have been ${category === 'Termination' ? 'terminated' : 'blacklisted'} at Kavià Cafe.\n\n> 🗒️ **Reason:** *${reason}*\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
+                        .setDescription(`> Greetings, <@${target.id}>\n\nYou have been ${category.toLowerCase()} at Kavià Cafe.\n\n> 🗒️ **Reason:** *${reason}*\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
 
                     if (category === 'Termination') {
                         try {
                             const memberToKick = await guild.members.fetch(target.id);
                             await memberToKick.kick(reason);
-                        } catch (err) {
-                            console.error("Failed to kick member:", err);
-                        }
+                        } catch (err) { console.error(err); }
                     }
                 }
 
@@ -231,9 +197,7 @@ client.on('interactionCreate', async interaction => {
                 try {
                     const memberToKick = await guild.members.fetch(target.id);
                     await memberToKick.kick(reason);
-                } catch (err) {
-                    console.error("Failed to kick member:", err);
-                }
+                } catch (err) { console.error(err); }
 
                 if (staffChannel) staffChannel.send({ embeds: [dmEmbed] });
 
@@ -257,9 +221,7 @@ client.on('interactionCreate', async interaction => {
                     const embed = new EmbedBuilder()
                         .setTitle('📥 New Rep Request')
                         .setColor('Blue')
-                        .setDescription(
-                            `**Requested By:** ${member}\n**Number of Reps:** ${numReps}\n**Discord Link:** ${dcLink}\n**Roblox Link:** ${robloxLink}\n**Alliance Link:** ${allianceLink}\n\n📌 Instructions\nWhen adding yourself to an alliance, make sure you give yourself the correct alliance roles.\nThis is very important.\n${new Date().toLocaleString()}`
-                        );
+                        .setDescription(`**Requested By:** ${member}\n**Number of Reps:** ${numReps}\n**Discord Link:** ${dcLink}\n**Roblox Link:** ${robloxLink}\n**Alliance Link:** ${allianceLink}\n\n📌 Instructions\nWhen adding yourself to an alliance, make sure you give yourself the correct alliance roles.\nThis is very important.\n${new Date().toLocaleString()}`);
 
                     channel.send({ content: role ? `${role}` : '', embeds: [embed] }).catch(console.error);
                 }
@@ -289,4 +251,4 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-client.login(process.env.TOKEN);
+client.login(process.env.TOKEN).catch(console.error);
