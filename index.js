@@ -4,7 +4,8 @@ const {
     Client,
     GatewayIntentBits,
     Partials,
-    EmbedBuilder
+    EmbedBuilder,
+    ActivityType
 } = require('discord.js');
 
 // Create client
@@ -96,8 +97,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (sub === 'list') {
-            if (alliances.length === 0)
-                return interaction.editReply('No alliances found.');
+            if (!alliances.length) return interaction.editReply('No alliances found.');
 
             const embed = new EmbedBuilder()
                 .setTitle('🌐 Current Alliances')
@@ -125,7 +125,6 @@ client.on('interactionCreate', async interaction => {
 
             alliances.splice(index, 1);
             fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
-
             return interaction.editReply(`✅ Alliance "${groupName}" removed`);
         }
 
@@ -135,7 +134,6 @@ client.on('interactionCreate', async interaction => {
 
             if (!alliance) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
 
-            // Update fields if provided
             const newGroup = options.getString('new_group');
             const newOur = options.getString('our_reps');
             const newTheir = options.getString('their_reps');
@@ -149,7 +147,6 @@ client.on('interactionCreate', async interaction => {
             if (newRoblox) alliance.robloxLink = newRoblox;
 
             fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
-
             return interaction.editReply(`✅ Alliance "${groupName}" updated`);
         }
     }
@@ -174,8 +171,8 @@ client.on('interactionCreate', async interaction => {
                     );
 
                 try { await target.send({ embeds: [dmEmbed] }); } catch {}
-                if (!gm.kickable) return interaction.editReply('❌ Cannot kick this member.');
 
+                if (!gm.kickable) return interaction.editReply('❌ Cannot kick this member.');
                 await gm.kick(reason);
                 return interaction.editReply(`❌ ${target.tag} has been kicked`);
             }
@@ -199,9 +196,6 @@ client.on('interactionCreate', async interaction => {
                     return interaction.editReply('✅ Strike removed');
                 }
             }
-
-            if (category === 'Termination') return interaction.editReply('❌ Terminate executed (custom logic)');
-            if (category === 'Blacklisted') return interaction.editReply('❌ Blacklist executed (custom logic)');
         }
 
         if (sub === 'strikes') {
@@ -227,10 +221,10 @@ client.on('interactionCreate', async interaction => {
     /* ===== /status ===== */
     if (commandName === 'status') {
         const newStatus = options.getString('status');
-        const type = options.getString('type') || 'PLAYING';
+        const type = options.getString('type') || 'Playing';
 
         client.user.setPresence({
-            activities: [{ name: newStatus, type }],
+            activities: [{ name: newStatus, type: ActivityType[type.toUpperCase()] || ActivityType.Playing }],
             status: 'online'
         });
 
@@ -240,13 +234,34 @@ client.on('interactionCreate', async interaction => {
     /* ===== /rep ===== */
     if (commandName === 'rep') {
         const sub = options.getSubcommand();
+
         if (sub === 'request') {
-            try {
-                return interaction.editReply(`✅ ${member.user.tag}, your rep request has been received!`);
-            } catch (err) {
-                console.error(err);
-                return interaction.editReply('❌ Error processing rep request.');
-            }
+            const numReps = options.getInteger('num_reps') || 1;
+            const discordLink = options.getString('discord_link') || 'N/A';
+            const robloxLink = options.getString('roblox_link') || 'N/A';
+            const allianceLink = options.getString('alliance_link') || 'N/A';
+            const staffRoleId = options.getString('staff_role_id');
+
+            const requestChannel = guild.channels.cache.find(c => c.name === 'request-new-rep');
+            if (!requestChannel) return interaction.editReply('❌ Channel request-new-rep not found.');
+
+            const embed = new EmbedBuilder()
+                .setTitle('📥 New Rep Request')
+                .setColor('Blue')
+                .addFields(
+                    { name: 'Requested By', value: `<@${member.user.id}>` },
+                    { name: 'Number of Reps', value: `${numReps}` },
+                    { name: 'Discord Link', value: discordLink },
+                    { name: 'Roblox Link', value: robloxLink },
+                    { name: 'Alliance Link', value: allianceLink },
+                    { name: '📌 Instructions', value: 'When adding yourself to an alliance, make sure you give yourself the correct alliance roles. This is very important.' },
+                    { name: 'Date', value: new Date().toLocaleString() }
+                );
+
+            if (staffRoleId) requestChannel.send({ content: `<@&${staffRoleId}>`, embeds: [embed] });
+            else requestChannel.send({ embeds: [embed] });
+
+            return interaction.editReply('✅ Your rep request has been sent!');
         }
     }
 });
