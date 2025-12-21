@@ -8,7 +8,6 @@ const {
     ActivityType
 } = require('discord.js');
 
-// Create client
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -31,7 +30,7 @@ let strikes = fs.existsSync('./staffStrikes.json')
 /* =======================
    READY EVENT
 ======================= */
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
@@ -55,11 +54,7 @@ client.on('interactionCreate', async interaction => {
             .setDescription(message)
             .setColor('Blue');
 
-        try {
-            await user.send({ embeds: [dmEmbed] });
-        } catch {
-            return interaction.editReply('❌ Could not send DM to that user.');
-        }
+        try { await user.send({ embeds: [dmEmbed] }); } catch {}
 
         const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
         if (logChannel) {
@@ -72,7 +67,6 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Sent By', value: `<@${member.user.id}>` },
                     { name: 'Sent At', value: new Date().toLocaleString() }
                 );
-
             logChannel.send({ embeds: [logEmbed] });
         }
 
@@ -218,7 +212,7 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'status') {
         await interaction.deferReply({ ephemeral: true });
         const newStatus = options.getString('status');
-        const typeInput = options.getString('type') || 'Playing';
+        const typeInput = options.getString('type') || 'playing';
         let type;
 
         switch (typeInput.toLowerCase()) {
@@ -234,9 +228,9 @@ client.on('interactionCreate', async interaction => {
                 activities: [{ name: newStatus, type }],
                 status: 'online'
             });
-            await interaction.editReply(`✅ Status updated to: ${typeInput} ${newStatus}`);
+            await interaction.editReply(`✅ Status updated: ${typeInput} ${newStatus}`);
         } catch (err) {
-            console.error(err);
+            console.error('Failed to update status:', err);
             await interaction.editReply('❌ Failed to update status.');
         }
     }
