@@ -19,20 +19,35 @@ const client = new Client({
 /* =======================
    DATA
 ======================= */
-let alliances = fs.existsSync('./alliances.json')
-    ? JSON.parse(fs.readFileSync('./alliances.json'))
-    : [];
+let alliances = [];
+let strikes = [];
 
-let strikes = fs.existsSync('./staffStrikes.json')
-    ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
-    : [];
+try {
+    if (fs.existsSync('./alliances.json')) {
+        alliances = JSON.parse(fs.readFileSync('./alliances.json'));
+    }
+} catch (err) {
+    console.error("Failed to read alliances.json:", err);
+}
+
+try {
+    if (fs.existsSync('./staffStrikes.json')) {
+        strikes = JSON.parse(fs.readFileSync('./staffStrikes.json'));
+    }
+} catch (err) {
+    console.error("Failed to read staffStrikes.json:", err);
+}
 
 /* =======================
    READY
 ======================= */
 client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
-    client.user.setActivity('Kavia Cafe', { type: 'PLAYING' }).catch(console.error);
+    try {
+        client.user.setActivity('Kavia Cafe', { type: 'PLAYING' }).catch(console.error);
+    } catch (err) {
+        console.error("Failed to set status:", err);
+    }
 });
 
 /* =======================
@@ -41,7 +56,7 @@ client.once('ready', () => {
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ ephemeral: true }).catch(console.error);
 
     try {
         const { commandName, options, guild, member } = interaction;
@@ -53,10 +68,14 @@ client.on('interactionCreate', async interaction => {
 
             const embed = new EmbedBuilder()
                 .setTitle('📩 Staff Message')
-                .setDescription(message)
-                .setColor('Blue');
+                .setColor('Blue')
+                .setDescription(message);
 
-            await target.send({ embeds: [embed] }).catch(console.error);
+            try {
+                await target.send({ embeds: [embed] });
+            } catch (err) {
+                console.error("Failed to DM user:", err);
+            }
 
             const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
             if (logChannel) {
@@ -167,8 +186,12 @@ client.on('interactionCreate', async interaction => {
                         .setDescription(`> Greetings, <@${target.id}>\n\nYou have been ${category === 'Termination' ? 'terminated' : 'blacklisted'} at Kavià Cafe.\n\n> 🗒️ **Reason:** *${reason}*\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
 
                     if (category === 'Termination') {
-                        const memberToKick = await guild.members.fetch(target.id);
-                        memberToKick.kick(reason).catch(console.error);
+                        try {
+                            const memberToKick = await guild.members.fetch(target.id);
+                            await memberToKick.kick(reason);
+                        } catch (err) {
+                            console.error("Failed to kick member:", err);
+                        }
                     }
                 }
 
@@ -205,8 +228,12 @@ client.on('interactionCreate', async interaction => {
                     .setDescription(`> Greetings, <@${target.id}>\n\nYou are being kicked from Kavià Cafe.\n\n> 🗒️ **Reason:** *${reason}*\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
 
                 await target.send({ embeds: [dmEmbed] }).catch(console.error);
-                const memberToKick = await guild.members.fetch(target.id);
-                memberToKick.kick(reason).catch(console.error);
+                try {
+                    const memberToKick = await guild.members.fetch(target.id);
+                    await memberToKick.kick(reason);
+                } catch (err) {
+                    console.error("Failed to kick member:", err);
+                }
 
                 if (staffChannel) staffChannel.send({ embeds: [dmEmbed] });
 
