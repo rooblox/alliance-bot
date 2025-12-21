@@ -216,6 +216,7 @@ client.on('interactionCreate', async interaction => {
 
     /* ===== /status ===== */
     if (commandName === 'status') {
+        await interaction.deferReply({ ephemeral: true });
         const newStatus = options.getString('status');
         const typeInput = options.getString('type') || 'Playing';
         let type;
@@ -233,10 +234,10 @@ client.on('interactionCreate', async interaction => {
                 activities: [{ name: newStatus, type }],
                 status: 'online'
             });
-            await interaction.reply(`✅ Status updated to: ${typeInput} ${newStatus}`);
+            await interaction.editReply(`✅ Status updated to: ${typeInput} ${newStatus}`);
         } catch (err) {
             console.error(err);
-            await interaction.reply('❌ Failed to update status.');
+            await interaction.editReply('❌ Failed to update status.');
         }
     }
 
@@ -250,7 +251,7 @@ client.on('interactionCreate', async interaction => {
             const discordLink = options.getString('discord_link') || 'N/A';
             const robloxLink = options.getString('roblox_link') || 'N/A';
             const allianceLink = options.getString('alliance_link') || 'N/A';
-            const staffRoleId = options.getString('staff_role_id');
+            const staffRole = guild.roles.cache.find(r => r.name === '[PR] | Staff Role');
 
             const requestChannel = guild.channels.cache.find(c => c.name === 'request-new-rep');
             if (!requestChannel) return interaction.editReply('❌ Channel request-new-rep not found.');
@@ -268,7 +269,7 @@ client.on('interactionCreate', async interaction => {
                     { name: 'Date', value: new Date().toLocaleString() }
                 );
 
-            if (staffRoleId) requestChannel.send({ content: `<@&${staffRoleId}>`, embeds: [embed] });
+            if (staffRole) requestChannel.send({ content: `<@&${staffRole.id}>`, embeds: [embed] });
             else requestChannel.send({ embeds: [embed] });
 
             return interaction.editReply('✅ Your rep request has been sent!');
