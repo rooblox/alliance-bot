@@ -49,7 +49,6 @@ client.on('interactionCreate', async interaction => {
         const user = options.getUser('user');
         const message = options.getString('message');
 
-        // DM to user
         const dmEmbed = new EmbedBuilder()
             .setTitle('📩 Staff Message')
             .setDescription(message)
@@ -61,7 +60,6 @@ client.on('interactionCreate', async interaction => {
             return interaction.editReply('❌ Could not send DM to that user.');
         }
 
-        // Log to dm-logs channel
         const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
         if (logChannel) {
             const logEmbed = new EmbedBuilder()
@@ -84,7 +82,6 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'alliance') {
         const sub = options.getSubcommand();
 
-        // Add alliance
         if (sub === 'add') {
             alliances.push({
                 group: options.getString('group'),
@@ -98,7 +95,6 @@ client.on('interactionCreate', async interaction => {
             return interaction.editReply('✅ Alliance added');
         }
 
-        // List alliances
         if (sub === 'list') {
             if (alliances.length === 0)
                 return interaction.editReply('No alliances found.');
@@ -121,19 +117,40 @@ client.on('interactionCreate', async interaction => {
             return interaction.editReply({ embeds: [embed] });
         }
 
-        // Remove alliance
         if (sub === 'remove') {
-            const groupName = options.getString('group'); // Name of the alliance to remove
+            const groupName = options.getString('group');
             const index = alliances.findIndex(a => a.group.toLowerCase() === groupName.toLowerCase());
 
-            if (index === -1) {
-                return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
-            }
+            if (index === -1) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
 
-            alliances.splice(index, 1); // Remove the alliance
+            alliances.splice(index, 1);
             fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
 
-            return interaction.editReply(`✅ Alliance "${groupName}" has been removed.`);
+            return interaction.editReply(`✅ Alliance "${groupName}" removed`);
+        }
+
+        if (sub === 'edit') {
+            const groupName = options.getString('group');
+            const alliance = alliances.find(a => a.group.toLowerCase() === groupName.toLowerCase());
+
+            if (!alliance) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
+
+            // Update fields if provided
+            const newGroup = options.getString('new_group');
+            const newOur = options.getString('our_reps');
+            const newTheir = options.getString('their_reps');
+            const newDiscord = options.getString('discord');
+            const newRoblox = options.getString('roblox');
+
+            if (newGroup) alliance.group = newGroup;
+            if (newOur) alliance.ourReps = newOur;
+            if (newTheir) alliance.theirReps = newTheir;
+            if (newDiscord) alliance.dcLink = newDiscord;
+            if (newRoblox) alliance.robloxLink = newRoblox;
+
+            fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
+
+            return interaction.editReply(`✅ Alliance "${groupName}" updated`);
         }
     }
 
@@ -147,9 +164,7 @@ client.on('interactionCreate', async interaction => {
         const gm = await guild.members.fetch(target.id);
 
         if (sub === 'discipline') {
-            // Only kick if action === 'kick'
             if (action === 'kick') {
-                // DM the user before kicking
                 const dmEmbed = new EmbedBuilder()
                     .setTitle('📩 You have been kicked')
                     .setColor('Red')
@@ -158,22 +173,13 @@ client.on('interactionCreate', async interaction => {
                         { name: 'By', value: `<@${member.user.id}>` }
                     );
 
-                try {
-                    await target.send({ embeds: [dmEmbed] });
-                } catch {
-                    console.log(`Could not DM ${target.tag} before kick.`);
-                }
-
-                // Kick the user
-                if (!gm.kickable) {
-                    return interaction.editReply('❌ I cannot kick this member. Check my role and permissions.');
-                }
+                try { await target.send({ embeds: [dmEmbed] }); } catch {}
+                if (!gm.kickable) return interaction.editReply('❌ Cannot kick this member.');
 
                 await gm.kick(reason);
                 return interaction.editReply(`❌ ${target.tag} has been kicked`);
             }
 
-            // Strike actions
             if (category === 'Strike') {
                 if (action === 'add') {
                     strikes.push({
@@ -187,28 +193,21 @@ client.on('interactionCreate', async interaction => {
                 }
                 if (action === 'remove') {
                     const index = strikes.findIndex(s => s.user === target.id);
-                    if (index === -1) return interaction.editReply('❌ No strikes found to remove.');
+                    if (index === -1) return interaction.editReply('❌ No strikes to remove.');
                     strikes.splice(index, 1);
                     fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
                     return interaction.editReply('✅ Strike removed');
                 }
             }
 
-            // Termination or Blacklisted logic
-            if (category === 'Termination') {
-                return interaction.editReply('❌ Terminate action executed (custom logic can go here)');
-            }
-            if (category === 'Blacklisted') {
-                return interaction.editReply('❌ Blacklist action executed (custom logic can go here)');
-            }
+            if (category === 'Termination') return interaction.editReply('❌ Terminate executed (custom logic)');
+            if (category === 'Blacklisted') return interaction.editReply('❌ Blacklist executed (custom logic)');
         }
 
-        // View strikes
         if (sub === 'strikes') {
             const userStrikes = strikes.filter(s => s.user === target.id);
 
-            if (userStrikes.length === 0)
-                return interaction.editReply('No strikes found.');
+            if (!userStrikes.length) return interaction.editReply('No strikes found.');
 
             const embed = new EmbedBuilder()
                 .setTitle(`⚠️ Strikes for ${target.tag}`)
@@ -222,6 +221,32 @@ client.on('interactionCreate', async interaction => {
             });
 
             return interaction.editReply({ embeds: [embed] });
+        }
+    }
+
+    /* ===== /status ===== */
+    if (commandName === 'status') {
+        const newStatus = options.getString('status');
+        const type = options.getString('type') || 'PLAYING';
+
+        client.user.setPresence({
+            activities: [{ name: newStatus, type }],
+            status: 'online'
+        });
+
+        return interaction.editReply(`✅ Status updated to: ${type} ${newStatus}`);
+    }
+
+    /* ===== /rep ===== */
+    if (commandName === 'rep') {
+        const sub = options.getSubcommand();
+        if (sub === 'request') {
+            try {
+                return interaction.editReply(`✅ ${member.user.tag}, your rep request has been received!`);
+            } catch (err) {
+                console.error(err);
+                return interaction.editReply('❌ Error processing rep request.');
+            }
         }
     }
 });
