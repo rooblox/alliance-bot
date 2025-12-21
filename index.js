@@ -41,12 +41,12 @@ client.once('ready', () => {
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
-    await interaction.deferReply({ ephemeral: true });
-
     const { commandName, options, guild, member } = interaction;
 
     /* ===== /dm ===== */
     if (commandName === 'dm') {
+        await interaction.deferReply({ ephemeral: true });
+
         const user = options.getUser('user');
         const message = options.getString('message');
 
@@ -81,6 +81,7 @@ client.on('interactionCreate', async interaction => {
 
     /* ===== /alliance ===== */
     if (commandName === 'alliance') {
+        await interaction.deferReply({ ephemeral: true });
         const sub = options.getSubcommand();
 
         if (sub === 'add') {
@@ -91,14 +92,12 @@ client.on('interactionCreate', async interaction => {
                 dcLink: options.getString('discord'),
                 robloxLink: options.getString('roblox')
             });
-
             fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
             return interaction.editReply('✅ Alliance added');
         }
 
         if (sub === 'list') {
             if (!alliances.length) return interaction.editReply('No alliances found.');
-
             const embed = new EmbedBuilder()
                 .setTitle('🌐 Current Alliances')
                 .setColor('Green');
@@ -120,9 +119,7 @@ client.on('interactionCreate', async interaction => {
         if (sub === 'remove') {
             const groupName = options.getString('group');
             const index = alliances.findIndex(a => a.group.toLowerCase() === groupName.toLowerCase());
-
             if (index === -1) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
-
             alliances.splice(index, 1);
             fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
             return interaction.editReply(`✅ Alliance "${groupName}" removed`);
@@ -131,7 +128,6 @@ client.on('interactionCreate', async interaction => {
         if (sub === 'edit') {
             const groupName = options.getString('group');
             const alliance = alliances.find(a => a.group.toLowerCase() === groupName.toLowerCase());
-
             if (!alliance) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
 
             const newGroup = options.getString('new_group');
@@ -153,6 +149,7 @@ client.on('interactionCreate', async interaction => {
 
     /* ===== /staff ===== */
     if (commandName === 'staff') {
+        await interaction.deferReply({ ephemeral: true });
         const sub = options.getSubcommand();
         const target = options.getUser('member');
         const category = options.getString('category');
@@ -200,7 +197,6 @@ client.on('interactionCreate', async interaction => {
 
         if (sub === 'strikes') {
             const userStrikes = strikes.filter(s => s.user === target.id);
-
             if (!userStrikes.length) return interaction.editReply('No strikes found.');
 
             const embed = new EmbedBuilder()
@@ -221,18 +217,32 @@ client.on('interactionCreate', async interaction => {
     /* ===== /status ===== */
     if (commandName === 'status') {
         const newStatus = options.getString('status');
-        const type = options.getString('type') || 'Playing';
+        const typeInput = options.getString('type') || 'Playing';
+        let type;
 
-        client.user.setPresence({
-            activities: [{ name: newStatus, type: ActivityType[type.toUpperCase()] || ActivityType.Playing }],
-            status: 'online'
-        });
+        switch (typeInput.toLowerCase()) {
+            case 'playing': type = ActivityType.Playing; break;
+            case 'watching': type = ActivityType.Watching; break;
+            case 'listening': type = ActivityType.Listening; break;
+            case 'competing': type = ActivityType.Competing; break;
+            default: type = ActivityType.Playing;
+        }
 
-        return interaction.editReply(`✅ Status updated to: ${type} ${newStatus}`);
+        try {
+            await client.user.setPresence({
+                activities: [{ name: newStatus, type }],
+                status: 'online'
+            });
+            await interaction.reply(`✅ Status updated to: ${typeInput} ${newStatus}`);
+        } catch (err) {
+            console.error(err);
+            await interaction.reply('❌ Failed to update status.');
+        }
     }
 
     /* ===== /rep ===== */
     if (commandName === 'rep') {
+        await interaction.deferReply({ ephemeral: true });
         const sub = options.getSubcommand();
 
         if (sub === 'request') {
