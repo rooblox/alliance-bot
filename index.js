@@ -29,7 +29,7 @@ let strikes = fs.existsSync('./staffStrikes.json')
 /* =======================
    READY EVENT
 ======================= */
-client.once('ready', async () => {
+client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
@@ -147,43 +147,65 @@ client.on('interactionCreate', async interaction => {
         const category = options.getString('category');
         const action = options.getString('action');
         const reason = options.getString('reason') || 'No reason provided';
-        const gm = await guild.members.fetch(target.id);
+        const targetMember = await guild.members.fetch(target.id);
 
         if (sub === 'discipline') {
-            if (action === 'kick') {
-                const dmEmbed = new EmbedBuilder()
-                    .setTitle('📩 You have been kicked')
-                    .setColor('Red')
+            // Compute strike number
+            const userStrikes = strikes.filter(s => s.user === target.id);
+            const strikeNumber = userStrikes.length + (action === 'add' ? 1 : 0);
+
+            // DM Embed
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('**Strike Notice**')
+                .setColor('Red')
+                .setDescription(`> Greetings, <@${target.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your **${strikeNumber}${strikeNumber === 1 ? 'st' : strikeNumber === 2 ? 'nd' : 'th'} strike.**\n\n> 🗒️ **Reason:** *${reason}*\n\nIf you feel like this was false or inaccurate please *open a ticket*.\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
+
+            try { await target.send({ embeds: [dmEmbed] }); } catch {}
+
+            // Log in staff-discipline channel
+            const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
+            if (logChannel) {
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('📌 Staff Discipline Log')
+                    .setColor('Orange')
                     .addFields(
-                        { name: 'Reason', value: reason },
-                        { name: 'By', value: `<@${member.user.id}>` }
+                        { name: 'Member', value: `<@${target.id}>`, inline: true },
+                        { name: 'Action', value: action, inline: true },
+                        { name: 'Reason', value: reason, inline: false },
+                        { name: 'Staff', value: `<@${member.user.id}>`, inline: true },
+                        { name: 'Strike #', value: `${strikeNumber}`, inline: true },
+                        { name: 'Date', value: new Date().toLocaleString(), inline: false }
                     );
-
-                try { await target.send({ embeds: [dmEmbed] }); } catch {}
-
-                if (!gm.kickable) return interaction.editReply('❌ Cannot kick this member.');
-                await gm.kick(reason);
-                return interaction.editReply(`❌ ${target.tag} has been kicked`);
+                logChannel.send({ embeds: [logEmbed] });
             }
 
-            if (category === 'Strike') {
-                if (action === 'add') {
-                    strikes.push({
-                        user: target.id,
-                        reason,
-                        staff: member.user.tag,
-                        date: new Date().toLocaleString()
-                    });
-                    fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
-                    return interaction.editReply('⚠️ Strike added');
-                }
-                if (action === 'remove') {
-                    const index = strikes.findIndex(s => s.user === target.id);
-                    if (index === -1) return interaction.editReply('❌ No strikes to remove.');
+            // Perform action
+            if (action === 'add') {
+                strikes.push({
+                    user: target.id,
+                    reason,
+                    staff: member.user.tag,
+                    date: new Date().toLocaleString()
+                });
+                fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
+                return interaction.editReply(`⚠️ Strike added to ${target.tag}`);
+            }
+
+            if (action === 'remove') {
+                const index = strikes.findIndex(s => s.user === target.id);
+                if (index !== -1) {
                     strikes.splice(index, 1);
                     fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
-                    return interaction.editReply('✅ Strike removed');
+                    return interaction.editReply(`✅ Strike removed from ${target.tag}`);
+                } else {
+                    return interaction.editReply(`❌ No strikes found for ${target.tag}`);
                 }
+            }
+
+            if (action === 'kick') {
+                if (!targetMember.kickable) return interaction.editReply('❌ Cannot kick this member.');
+                await targetMember.kick(reason);
+                return interaction.editReply(`❌ ${target.tag} has been kicked`);
             }
         }
 
