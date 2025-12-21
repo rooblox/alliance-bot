@@ -4,8 +4,7 @@ const {
     Client,
     GatewayIntentBits,
     Partials,
-    EmbedBuilder,
-    ActivityType
+    EmbedBuilder
 } = require('discord.js');
 
 const client = new Client({
@@ -45,7 +44,6 @@ client.on('interactionCreate', async interaction => {
     /* ===== /dm ===== */
     if (commandName === 'dm') {
         await interaction.deferReply({ ephemeral: true });
-
         const user = options.getUser('user');
         const message = options.getString('message');
 
@@ -212,23 +210,11 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'status') {
         await interaction.deferReply({ ephemeral: true });
         const newStatus = options.getString('status');
-        const typeInput = options.getString('type') || 'playing';
-        let type;
-
-        switch (typeInput.toLowerCase()) {
-            case 'playing': type = ActivityType.Playing; break;
-            case 'watching': type = ActivityType.Watching; break;
-            case 'listening': type = ActivityType.Listening; break;
-            case 'competing': type = ActivityType.Competing; break;
-            default: type = ActivityType.Playing;
-        }
-
         try {
             await client.user.setPresence({
-                activities: [{ name: newStatus, type }],
-                status: 'online'
+                activities: [{ name: newStatus, type: 0 }] // Playing
             });
-            await interaction.editReply(`✅ Status updated: ${typeInput} ${newStatus}`);
+            await interaction.editReply(`✅ Status updated: Playing ${newStatus}`);
         } catch (err) {
             console.error('Failed to update status:', err);
             await interaction.editReply('❌ Failed to update status.');
