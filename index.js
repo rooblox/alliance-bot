@@ -7,13 +7,13 @@ const {
     EmbedBuilder
 } = require('discord.js');
 
-// Create client without privileged intents
+// Create client
 const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds,       // Needed for slash commands and guild info
-        GatewayIntentBits.DirectMessages // Needed for sending DMs
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.DirectMessages
     ],
-    partials: [Partials.Channel] // Required for DMs
+    partials: [Partials.Channel]
 });
 
 /* =======================
@@ -49,19 +49,33 @@ client.on('interactionCreate', async interaction => {
         const user = options.getUser('user');
         const message = options.getString('message');
 
-        const embed = new EmbedBuilder()
+        // DM to user
+        const dmEmbed = new EmbedBuilder()
             .setTitle('📩 Staff Message')
             .setDescription(message)
             .setColor('Blue');
 
         try {
-            await user.send({ embeds: [embed] });
+            await user.send({ embeds: [dmEmbed] });
         } catch {
             return interaction.editReply('❌ Could not send DM to that user.');
         }
 
-        const log = guild.channels.cache.find(c => c.name === 'dm-logs');
-        if (log) log.send({ embeds: [embed] });
+        // Log to dm-logs channel
+        const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
+        if (logChannel) {
+            const logEmbed = new EmbedBuilder()
+                .setTitle('📩 Staff Message')
+                .setColor('Blue')
+                .addFields(
+                    { name: 'To', value: `<@${user.id}>` },
+                    { name: 'Message', value: message },
+                    { name: 'Sent By', value: `<@${member.user.id}>` },
+                    { name: 'Sent At', value: new Date().toLocaleString() }
+                );
+
+            logChannel.send({ embeds: [logEmbed] });
+        }
 
         return interaction.editReply('✅ DM sent');
     }
@@ -70,6 +84,7 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'alliance') {
         const sub = options.getSubcommand();
 
+        // Add alliance
         if (sub === 'add') {
             alliances.push({
                 group: options.getString('group'),
@@ -83,7 +98,11 @@ client.on('interactionCreate', async interaction => {
             return interaction.editReply('✅ Alliance added');
         }
 
+        // List alliances
         if (sub === 'list') {
+            if (alliances.length === 0)
+                return interaction.editReply('No alliances found.');
+
             const embed = new EmbedBuilder()
                 .setTitle('🌐 Current Alliances')
                 .setColor('Green');
@@ -101,6 +120,21 @@ client.on('interactionCreate', async interaction => {
 
             return interaction.editReply({ embeds: [embed] });
         }
+
+        // Remove alliance
+        if (sub === 'remove') {
+            const groupName = options.getString('group'); // Name of the alliance to remove
+            const index = alliances.findIndex(a => a.group.toLowerCase() === groupName.toLowerCase());
+
+            if (index === -1) {
+                return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
+            }
+
+            alliances.splice(index, 1); // Remove the alliance
+            fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
+
+            return interaction.editReply(`✅ Alliance "${groupName}" has been removed.`);
+        }
     }
 
     /* ===== /staff ===== */
@@ -108,6 +142,7 @@ client.on('interactionCreate', async interaction => {
         const sub = options.getSubcommand();
         const target = options.getUser('member');
 
+        // Discipline: strike or terminate
         if (sub === 'discipline') {
             const action = options.getString('action');
             const reason = options.getString('reason');
@@ -135,6 +170,7 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
+        // View strikes
         if (sub === 'strikes') {
             const userStrikes = strikes.filter(s => s.user === target.id);
 
