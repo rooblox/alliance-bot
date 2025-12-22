@@ -99,10 +99,11 @@ client.on('interactionCreate', async (interaction) => {
                 const group = options.getString('group');
                 const ourReps = options.getString('our_reps');
                 const theirReps = options.getString('their_reps');
-                const dcLink = (options.getString('discord') || '').trim();
-                const robloxLink = (options.getString('roblox') || '').trim();
+                const dcLink = options.getString('discord') || '';
+                const robloxLink = options.getString('roblox') || '';
                 const publicChannel = options.getChannel('public_channel') || null;
 
+                // Push new alliance
                 alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
                 fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
 
@@ -122,7 +123,7 @@ client.on('interactionCreate', async (interaction) => {
                     logChannel.send({ embeds: [logEmbed] });
                 }
 
-                // Send welcome message to public channel
+                // Send public welcome message
                 if (publicChannel && publicChannel.isTextBased()) {
                     const welcome = `:tada: **Welcome New Alliance! | Kavi Café x ${group}** :tada:
 
@@ -133,7 +134,7 @@ This partnership is all about mutual growth, support, and fun — and we can’t
 If you have any questions, concerns, or suggestions, this is the perfect place to share them. We value communication and want to make sure both of our communities get the most out of this partnership.
 
 :busts_in_silhouette: Please meet your Kavi Café representatives:
-${ourReps.split(/,| /).filter(Boolean).map(u => `**•** ${u}`).join('\n')}
+${ourReps.split(/,| /).map(u => `**•** ${u}`).join('\n')}
 
 :handshake: **Looking Ahead**
 We’re so excited to be working together and building a strong, positive relationship between our communities. Expect fun events, cross-community opportunities, and lasting connections.
@@ -154,16 +155,13 @@ We’re so excited to be working together and building a strong, positive relati
                     .setColor('Green');
 
                 alliances.forEach(a => {
-                    const dcLink = a.dcLink?.trim() || null;
-                    const robloxLink = a.robloxLink?.trim() || null;
-
                     embed.addFields({
                         name: a.group,
                         value:
                             `**Our Reps:** ${a.ourReps || 'N/A'}\n` +
                             `**Their Reps:** ${a.theirReps || 'N/A'}\n` +
-                            `🔗 Discord: ${dcLink ? dcLink : 'N/A'}\n` +
-                            `🔗 Roblox: ${robloxLink ? robloxLink : 'N/A'}`
+                            `🔗 Discord: ${a.dcLink || 'N/A'}\n` +
+                            `🔗 Roblox: ${a.robloxLink || 'N/A'}`
                     });
                 });
 
@@ -200,8 +198,8 @@ We’re so excited to be working together and building a strong, positive relati
                 const newGroup = options.getString('new_group');
                 const newOur = options.getString('our_reps');
                 const newTheir = options.getString('their_reps');
-                const newDiscord = (options.getString('discord') || '').trim();
-                const newRoblox = (options.getString('roblox') || '').trim();
+                const newDiscord = options.getString('discord');
+                const newRoblox = options.getString('roblox');
 
                 if (newGroup) alliance.group = newGroup;
                 if (newOur) alliance.ourReps = newOur;
