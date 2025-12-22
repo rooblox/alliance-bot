@@ -150,37 +150,36 @@ client.on('interactionCreate', async interaction => {
         const targetMember = await guild.members.fetch(target.id);
 
         if (sub === 'discipline') {
-            // Compute strike number
-            const userStrikes = strikes.filter(s => s.user === target.id);
-            const strikeNumber = userStrikes.length + (action === 'add' ? 1 : 0);
-
-            // DM Embed
-            const dmEmbed = new EmbedBuilder()
-                .setTitle('**Strike Notice**')
-                .setColor('Red')
-                .setDescription(`> Greetings, <@${target.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your **${strikeNumber}${strikeNumber === 1 ? 'st' : strikeNumber === 2 ? 'nd' : 'th'} strike.**\n\n> 🗒️ **Reason:** *${reason}*\n\nIf you feel like this was false or inaccurate please *open a ticket*.\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
-
-            try { await target.send({ embeds: [dmEmbed] }); } catch {}
-
-            // Log in staff-discipline channel
             const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
-            if (logChannel) {
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📌 Staff Discipline Log')
-                    .setColor('Orange')
-                    .addFields(
-                        { name: 'Member', value: `<@${target.id}>`, inline: true },
-                        { name: 'Action', value: action, inline: true },
-                        { name: 'Reason', value: reason, inline: false },
-                        { name: 'Staff', value: `<@${member.user.id}>`, inline: true },
-                        { name: 'Strike #', value: `${strikeNumber}`, inline: true },
-                        { name: 'Date', value: new Date().toLocaleString(), inline: false }
-                    );
-                logChannel.send({ embeds: [logEmbed] });
-            }
 
-            // Perform action
             if (action === 'add') {
+                const userStrikes = strikes.filter(s => s.user === target.id);
+                const strikeNumber = userStrikes.length + 1;
+
+                // DM Embed for strike
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('**Strike Notice**')
+                    .setColor('Red')
+                    .setDescription(`> Greetings, <@${target.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your **${strikeNumber}${strikeNumber === 1 ? 'st' : strikeNumber === 2 ? 'nd' : 'th'} strike.**\n\n> 🗒️ **Reason:** *${reason}*\n\nIf you feel like this was false or inaccurate please *open a ticket*.\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
+
+                try { await target.send({ embeds: [dmEmbed] }); } catch {}
+
+                // Log Embed
+                if (logChannel) {
+                    const logEmbed = new EmbedBuilder()
+                        .setTitle('📌 Staff Discipline Log')
+                        .setColor('Orange')
+                        .addFields(
+                            { name: 'Member', value: `<@${target.id}>`, inline: true },
+                            { name: 'Action', value: action, inline: true },
+                            { name: 'Reason', value: reason, inline: false },
+                            { name: 'Staff', value: `<@${member.user.id}>`, inline: true },
+                            { name: 'Strike #', value: `${strikeNumber}`, inline: true },
+                            { name: 'Date', value: new Date().toLocaleString(), inline: false }
+                        );
+                    logChannel.send({ embeds: [logEmbed] });
+                }
+
                 strikes.push({
                     user: target.id,
                     reason,
@@ -194,11 +193,35 @@ client.on('interactionCreate', async interaction => {
             if (action === 'remove') {
                 const index = strikes.findIndex(s => s.user === target.id);
                 if (index !== -1) {
-                    strikes.splice(index, 1);
+                    const removed = strikes.splice(index, 1)[0];
                     fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
-                    return interaction.editReply(`✅ Strike removed from ${target.tag}`);
+
+                    // DM Embed for removal
+                    const dmEmbed = new EmbedBuilder()
+                        .setTitle('**Notice of Removal**')
+                        .setColor('Green')
+                        .setDescription(`> Greetings, <@${target.id}>\n\nYour ${category} has been removed at Kavià Cafe.\n\n> 🗒️ **Reason:** *${removed.reason}*\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
+
+                    try { await target.send({ embeds: [dmEmbed] }); } catch {}
+
+                    // Log Embed
+                    if (logChannel) {
+                        const logEmbed = new EmbedBuilder()
+                            .setTitle('📌 Staff Discipline Log')
+                            .setColor('Orange')
+                            .addFields(
+                                { name: 'Member', value: `<@${target.id}>`, inline: true },
+                                { name: 'Action', value: `Removed ${category}`, inline: true },
+                                { name: 'Reason', value: removed.reason, inline: false },
+                                { name: 'Staff', value: `<@${member.user.id}>`, inline: true },
+                                { name: 'Date', value: new Date().toLocaleString(), inline: false }
+                            );
+                        logChannel.send({ embeds: [logEmbed] });
+                    }
+
+                    return interaction.editReply(`✅ ${category} removed from ${target.tag}`);
                 } else {
-                    return interaction.editReply(`❌ No strikes found for ${target.tag}`);
+                    return interaction.editReply(`❌ No ${category} found for ${target.tag}`);
                 }
             }
 
