@@ -12,9 +12,9 @@ const client = new Client({
     partials: [Partials.Channel]
 });
 
-// =======================
-// DATA FILES
-// =======================
+/* =======================
+   DATA FILES
+======================= */
 let alliances = fs.existsSync('./alliances.json')
     ? JSON.parse(fs.readFileSync('./alliances.json'))
     : [];
@@ -23,16 +23,16 @@ let strikes = fs.existsSync('./staffStrikes.json')
     ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
     : [];
 
-// =======================
-// READY
-// =======================
+/* =======================
+   READY EVENT
+======================= */
 client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// =======================
-// DM LOGGING
-// =======================
+/* =======================
+   DM LOGGING
+======================= */
 client.on('messageCreate', async (message) => {
     if (!message.guild && !message.author.bot) {
         const logChannel = client.channels.cache.find(c => c.name === 'dm-logs');
@@ -51,24 +51,24 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// =======================
-// INTERACTIONS
-// =======================
+/* =======================
+   INTERACTIONS
+======================= */
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
     const { commandName, options, member, guild } = interaction;
 
     try {
-        // ===== /dm =====
+        /* ===== /dm ===== */
         if (commandName === 'dm') {
             await interaction.deferReply({ ephemeral: true });
             const user = options.getUser('user');
-            const msg = options.getString('message');
+            const message = options.getString('message');
 
             const dmEmbed = new EmbedBuilder()
                 .setTitle('📩 Staff Message')
-                .setDescription(msg)
+                .setDescription(message)
                 .setColor('Blue');
 
             try { await user.send({ embeds: [dmEmbed] }); } catch {}
@@ -80,7 +80,7 @@ client.on('interactionCreate', async (interaction) => {
                     .setColor('Blue')
                     .addFields(
                         { name: 'To', value: `<@${user.id}>` },
-                        { name: 'Message', value: msg },
+                        { name: 'Message', value: message },
                         { name: 'Sent By', value: `<@${member.user.id}>` },
                         { name: 'Sent At', value: new Date().toLocaleString() }
                     );
@@ -90,7 +90,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.editReply('✅ DM sent');
         }
 
-        // ===== /alliance =====
+        /* ===== /alliance ===== */
         if (commandName === 'alliance') {
             await interaction.deferReply({ ephemeral: true });
             const sub = options.getSubcommand();
@@ -99,14 +99,14 @@ client.on('interactionCreate', async (interaction) => {
                 const group = options.getString('group');
                 const ourReps = options.getString('our_reps');
                 const theirReps = options.getString('their_reps');
-                const dcLink = options.getString('discord'); // REQUIRED now
-                const robloxLink = options.getString('roblox'); // REQUIRED now
+                const dcLink = (options.getString('discord') || '').trim();
+                const robloxLink = (options.getString('roblox') || '').trim();
                 const publicChannel = options.getChannel('public_channel') || null;
 
                 alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
                 fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
 
-                // log in alliance-add channel
+                // Log in alliance-add channel
                 const logChannel = guild.channels.cache.find(c => c.name === 'alliance-add');
                 if (logChannel) {
                     const logEmbed = new EmbedBuilder()
@@ -116,26 +116,29 @@ client.on('interactionCreate', async (interaction) => {
                             { name: 'Group', value: group },
                             { name: 'Our Reps', value: ourReps },
                             { name: 'Their Reps', value: theirReps },
-                            { name: 'Discord Link', value: dcLink },
-                            { name: 'Roblox Link', value: robloxLink }
+                            { name: 'Discord Link', value: dcLink || 'N/A' },
+                            { name: 'Roblox Link', value: robloxLink || 'N/A' }
                         );
                     logChannel.send({ embeds: [logEmbed] });
                 }
 
-                // send welcome message to public channel
+                // Send welcome message to public channel
                 if (publicChannel && publicChannel.isTextBased()) {
                     const welcome = `:tada: **Welcome New Alliance! | Kavi Café x ${group}** :tada:
 
 We’re thrilled to officially welcome your community into an alliance with Kavi Café! :star2:
+This partnership is all about mutual growth, support, and fun — and we can’t wait to see what we’ll achieve together.
+
+:speech_balloon: **Questions & Support**
+If you have any questions, concerns, or suggestions, this is the perfect place to share them. We value communication and want to make sure both of our communities get the most out of this partnership.
 
 :busts_in_silhouette: Please meet your Kavi Café representatives:
-${ourReps.split(/,| /).map(u => `**•** ${u}`).join('\n')}
+${ourReps.split(/,| /).filter(Boolean).map(u => `**•** ${u}`).join('\n')}
 
 :handshake: **Looking Ahead**
-Excited to work together!
+We’re so excited to be working together and building a strong, positive relationship between our communities. Expect fun events, cross-community opportunities, and lasting connections.
 
-🔗 Discord: ${dcLink}
-🔗 Roblox: ${robloxLink}`;
+:coffee::sparkles: Here’s to a successful partnership between **Kavi Café** and **${group}**! :sparkles::coffee:`;
 
                     publicChannel.send(welcome);
                 }
@@ -151,13 +154,16 @@ Excited to work together!
                     .setColor('Green');
 
                 alliances.forEach(a => {
+                    const dcLink = a.dcLink?.trim() || null;
+                    const robloxLink = a.robloxLink?.trim() || null;
+
                     embed.addFields({
                         name: a.group,
                         value:
-                            `**Our Reps:** ${a.ourReps}\n` +
-                            `**Their Reps:** ${a.theirReps}\n` +
-                            `🔗 Discord: ${a.dcLink}\n` +
-                            `🔗 Roblox: ${a.robloxLink}`
+                            `**Our Reps:** ${a.ourReps || 'N/A'}\n` +
+                            `**Their Reps:** ${a.theirReps || 'N/A'}\n` +
+                            `🔗 Discord: ${dcLink ? dcLink : 'N/A'}\n` +
+                            `🔗 Roblox: ${robloxLink ? robloxLink : 'N/A'}`
                     });
                 });
 
@@ -168,7 +174,6 @@ Excited to work together!
                 const groupName = options.getString('group');
                 const index = alliances.findIndex(a => a.group.toLowerCase() === groupName.toLowerCase());
                 if (index === -1) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
-
                 alliances.splice(index, 1);
                 fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
 
@@ -195,8 +200,8 @@ Excited to work together!
                 const newGroup = options.getString('new_group');
                 const newOur = options.getString('our_reps');
                 const newTheir = options.getString('their_reps');
-                const newDiscord = options.getString('discord');
-                const newRoblox = options.getString('roblox');
+                const newDiscord = (options.getString('discord') || '').trim();
+                const newRoblox = (options.getString('roblox') || '').trim();
 
                 if (newGroup) alliance.group = newGroup;
                 if (newOur) alliance.ourReps = newOur;
@@ -215,8 +220,8 @@ Excited to work together!
                             { name: 'Group', value: alliance.group },
                             { name: 'Our Reps', value: alliance.ourReps },
                             { name: 'Their Reps', value: alliance.theirReps },
-                            { name: 'Discord Link', value: alliance.dcLink },
-                            { name: 'Roblox Link', value: alliance.robloxLink }
+                            { name: 'Discord Link', value: alliance.dcLink || 'N/A' },
+                            { name: 'Roblox Link', value: alliance.robloxLink || 'N/A' }
                         );
                     logChannel.send({ embeds: [logEmbed] });
                 }
@@ -225,10 +230,10 @@ Excited to work together!
             }
         }
 
-        // ===== /status =====
+        /* ===== /status ===== */
         if (commandName === 'status') {
             await interaction.deferReply({ ephemeral: true });
-            const statusText = options.getString('status') || 'Kavi Café';
+            const statusText = options.getString('text') || 'Kavi Café';
             await client.user.setPresence({
                 activities: [{ name: statusText, type: 0 }]
             });
@@ -245,7 +250,7 @@ Excited to work together!
     }
 });
 
-// =======================
-// LOGIN
-// =======================
+/* =======================
+   LOGIN
+======================= */
 client.login(process.env.TOKEN);
