@@ -56,39 +56,9 @@ client.on('messageCreate', async (message) => {
 ======================= */
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
-
     const { commandName, options, member, guild } = interaction;
 
     try {
-        /* ===== /dm ===== */
-        if (commandName === 'dm') {
-            await interaction.deferReply({ ephemeral: true });
-            const user = options.getUser('user');
-            const message = options.getString('message');
-
-            const dmEmbed = new EmbedBuilder()
-                .setTitle('📩 Staff Message')
-                .setDescription(message)
-                .setColor('Blue');
-
-            try { await user.send({ embeds: [dmEmbed] }); } catch {}
-
-            const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
-            if (logChannel) {
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📩 Staff Message')
-                    .setColor('Blue')
-                    .addFields(
-                        { name: 'To', value: `<@${user.id}>` },
-                        { name: 'Message', value: message },
-                        { name: 'Sent By', value: `<@${member.user.id}>` },
-                        { name: 'Sent At', value: new Date().toLocaleString() }
-                    );
-                logChannel.send({ embeds: [logEmbed] });
-            }
-
-            return interaction.editReply('✅ DM sent');
-        }
 
         /* ===== /alliance ===== */
         if (commandName === 'alliance') {
@@ -99,8 +69,8 @@ client.on('interactionCreate', async (interaction) => {
                 const group = options.getString('group');
                 const ourReps = options.getString('our_reps');
                 const theirReps = options.getString('their_reps');
-                const dcLink = (options.getString('discord') || '').trim();
-                const robloxLink = (options.getString('roblox') || '').trim();
+                const dcLink = options.getString('discord');
+                const robloxLink = options.getString('roblox');
                 const publicChannel = options.getChannel('public_channel') || null;
 
                 alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
@@ -127,16 +97,12 @@ client.on('interactionCreate', async (interaction) => {
                     const welcome = `:tada: **Welcome New Alliance! | Kavi Café x ${group}** :tada:
 
 We’re thrilled to officially welcome your community into an alliance with Kavi Café! :star2:
-This partnership is all about mutual growth, support, and fun — and we can’t wait to see what we’ll achieve together.
-
-:speech_balloon: **Questions & Support**
-If you have any questions, concerns, or suggestions, this is the perfect place to share them. We value communication and want to make sure both of our communities get the most out of this partnership.
 
 :busts_in_silhouette: Please meet your Kavi Café representatives:
 ${ourReps.split(/,| /).filter(Boolean).map(u => `**•** ${u}`).join('\n')}
 
 :handshake: **Looking Ahead**
-We’re so excited to be working together and building a strong, positive relationship between our communities. Expect fun events, cross-community opportunities, and lasting connections.
+We’re excited to be working together and building a strong, positive relationship.
 
 :coffee::sparkles: Here’s to a successful partnership between **Kavi Café** and **${group}**! :sparkles::coffee:`;
 
@@ -197,8 +163,8 @@ We’re so excited to be working together and building a strong, positive relati
                 const newGroup = options.getString('new_group');
                 const newOur = options.getString('our_reps');
                 const newTheir = options.getString('their_reps');
-                const newDiscord = (options.getString('discord') || '').trim();
-                const newRoblox = (options.getString('roblox') || '').trim();
+                const newDiscord = options.getString('discord');
+                const newRoblox = options.getString('roblox');
 
                 if (newGroup) alliance.group = newGroup;
                 if (newOur) alliance.ourReps = newOur;
@@ -227,18 +193,35 @@ We’re so excited to be working together and building a strong, positive relati
             }
         }
 
-        /* ===== /rep request ===== */
+        /* ===== /rep ===== */
         if (commandName === 'rep') {
             await interaction.deferReply({ ephemeral: true });
             const sub = options.getSubcommand();
+
             if (sub === 'request') {
                 const numReps = options.getInteger('num_reps');
                 const discordLink = options.getString('discord_link');
                 const robloxLink = options.getString('roblox_link');
                 const allianceLink = options.getString('alliance_link');
 
-                // Simple response showing data
-                return interaction.editReply(`✅ Rep request submitted:\n**Number of reps:** ${numReps}\n**Discord:** [Click Here](${discordLink})\n**Roblox:** [Click Here](${robloxLink})\n**Alliance:** [Click Here](${allianceLink})`);
+                const logChannel = guild.channels.cache.find(c => c.name === 'request-new-rep');
+                if (logChannel && logChannel.isTextBased()) {
+                    const embed = new EmbedBuilder()
+                        .setTitle('📥 New Rep Request')
+                        .setColor('Blue')
+                        .addFields(
+                            { name: 'Requested By', value: `<@${member.user.id}>` },
+                            { name: 'Number of Reps', value: `${numReps}` },
+                            { name: 'Discord Link', value: discordLink ? `[Click Here](${discordLink})` : 'N/A' },
+                            { name: 'Roblox Link', value: robloxLink ? `[Click Here](${robloxLink})` : 'N/A' },
+                            { name: 'Alliance Link', value: allianceLink ? `[Click Here](${allianceLink})` : 'N/A' },
+                            { name: '📌 Instructions', value: 'When adding yourself to an alliance, make sure you give yourself the correct alliance roles. This is very important.' },
+                            { name: 'Date', value: new Date().toLocaleString() }
+                        );
+                    logChannel.send({ embeds: [embed] });
+                }
+
+                return interaction.editReply('✅ Your rep request has been sent.');
             }
         }
 
