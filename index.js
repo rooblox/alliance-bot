@@ -116,8 +116,8 @@ client.on('interactionCreate', async (interaction) => {
                             { name: 'Group', value: group },
                             { name: 'Our Reps', value: ourReps },
                             { name: 'Their Reps', value: theirReps },
-                            { name: 'Discord Link', value: dcLink || 'N/A' },
-                            { name: 'Roblox Link', value: robloxLink || 'N/A' }
+                            { name: 'Discord Link', value: dcLink ? `[Click Here](${dcLink})` : 'N/A' },
+                            { name: 'Roblox Link', value: robloxLink ? `[Click Here](${robloxLink})` : 'N/A' }
                         );
                     logChannel.send({ embeds: [logEmbed] });
                 }
@@ -154,16 +154,13 @@ We’re so excited to be working together and building a strong, positive relati
                     .setColor('Green');
 
                 alliances.forEach(a => {
-                    const dcLink = a.dcLink?.trim() || null;
-                    const robloxLink = a.robloxLink?.trim() || null;
-
                     embed.addFields({
                         name: a.group,
                         value:
                             `**Our Reps:** ${a.ourReps || 'N/A'}\n` +
                             `**Their Reps:** ${a.theirReps || 'N/A'}\n` +
-                            `🔗 Discord: ${dcLink ? dcLink : 'N/A'}\n` +
-                            `🔗 Roblox: ${robloxLink ? robloxLink : 'N/A'}`
+                            `🔗 Discord: ${a.dcLink ? `[Click Here](${a.dcLink})` : 'N/A'}\n` +
+                            `🔗 Roblox: ${a.robloxLink ? `[Click Here](${a.robloxLink})` : 'N/A'}`
                     });
                 });
 
@@ -220,13 +217,28 @@ We’re so excited to be working together and building a strong, positive relati
                             { name: 'Group', value: alliance.group },
                             { name: 'Our Reps', value: alliance.ourReps },
                             { name: 'Their Reps', value: alliance.theirReps },
-                            { name: 'Discord Link', value: alliance.dcLink || 'N/A' },
-                            { name: 'Roblox Link', value: alliance.robloxLink || 'N/A' }
+                            { name: 'Discord Link', value: alliance.dcLink ? `[Click Here](${alliance.dcLink})` : 'N/A' },
+                            { name: 'Roblox Link', value: alliance.robloxLink ? `[Click Here](${alliance.robloxLink})` : 'N/A' }
                         );
                     logChannel.send({ embeds: [logEmbed] });
                 }
 
                 return interaction.editReply(`✅ Alliance "${alliance.group}" updated.`);
+            }
+        }
+
+        /* ===== /rep request ===== */
+        if (commandName === 'rep') {
+            await interaction.deferReply({ ephemeral: true });
+            const sub = options.getSubcommand();
+            if (sub === 'request') {
+                const numReps = options.getInteger('num_reps');
+                const discordLink = options.getString('discord_link');
+                const robloxLink = options.getString('roblox_link');
+                const allianceLink = options.getString('alliance_link');
+
+                // Simple response showing data
+                return interaction.editReply(`✅ Rep request submitted:\n**Number of reps:** ${numReps}\n**Discord:** [Click Here](${discordLink})\n**Roblox:** [Click Here](${robloxLink})\n**Alliance:** [Click Here](${allianceLink})`);
             }
         }
 
