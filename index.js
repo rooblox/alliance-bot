@@ -17,14 +17,12 @@ const client = new Client({
 });
 
 /* =======================
-   DATA FILES
+   DATA
 ======================= */
-let alliances = fs.existsSync('./alliances.json')
-    ? JSON.parse(fs.readFileSync('./alliances.json'))
-    : [];
+const ALLIANCE_FILE = './alliances.json';
 
-let strikes = fs.existsSync('./staffStrikes.json')
-    ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
+let alliances = fs.existsSync(ALLIANCE_FILE)
+    ? JSON.parse(fs.readFileSync(ALLIANCE_FILE))
     : [];
 
 /* =======================
@@ -35,192 +33,142 @@ client.once('ready', () => {
 });
 
 /* =======================
-   DM REPLY LOGGING
-======================= */
-client.on('messageCreate', async message => {
-    if (message.author.bot) return;
-    if (message.guild) return; // Only DMs
-
-    const guild = client.guilds.cache.first();
-    if (!guild) return;
-
-    const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
-    if (!logChannel) return;
-
-    const embed = new EmbedBuilder()
-        .setTitle('📩 Staff Message Reply')
-        .setColor('Blue')
-        .addFields(
-            { name: 'To', value: 'Bot' },
-            { name: 'Message', value: message.content || '*No content*' },
-            { name: 'Sent By', value: `<@${message.author.id}>` },
-            { name: 'Sent At', value: new Date().toLocaleString() }
-        );
-
-    logChannel.send({ embeds: [embed] });
-});
-
-/* =======================
    INTERACTIONS
 ======================= */
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
+
     const { commandName, options, guild, member } = interaction;
-
-    /* ===== /dm ===== */
-    if (commandName === 'dm') {
-        await interaction.deferReply({ ephemeral: true });
-
-        const user = options.getUser('user');
-        const message = options.getString('message');
-
-        const dmEmbed = new EmbedBuilder()
-            .setTitle('📩 Staff Message')
-            .setDescription(message)
-            .setColor('Blue');
-
-        try { await user.send({ embeds: [dmEmbed] }); } catch {}
-
-        const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
-        if (logChannel) {
-            const logEmbed = new EmbedBuilder()
-                .setTitle('📩 Staff Message')
-                .setColor('Blue')
-                .addFields(
-                    { name: 'To', value: `<@${user.id}>` },
-                    { name: 'Message', value: message },
-                    { name: 'Sent By', value: `<@${member.user.id}>` },
-                    { name: 'Sent At', value: new Date().toLocaleString() }
-                );
-            logChannel.send({ embeds: [logEmbed] });
-        }
-
-        return interaction.editReply('✅ DM sent');
-    }
 
     /* ===== /alliance ===== */
     if (commandName === 'alliance') {
         await interaction.deferReply({ ephemeral: true });
+
         const sub = options.getSubcommand();
         const logChannel = guild.channels.cache.find(c => c.name === 'alliance-add');
 
-        const log = (action, allianceName) => {
-            if (!logChannel) return;
-            const embed = new EmbedBuilder()
-                .setTitle('🌐 Alliance Update')
-                .setColor('Green')
-                .addFields(
-                    { name: 'Action', value: action },
-                    { name: 'Alliance', value: allianceName },
-                    { name: 'Staff', value: `<@${member.user.id}>` },
-                    { name: 'Date', value: new Date().toLocaleString() }
-                );
-            logChannel.send({ embeds: [embed] });
-        };
-
+        /* ===== ADD ===== */
         if (sub === 'add') {
-            const data = {
-                group: options.getString('group'),
-                ourReps: options.getString('our_reps'),
-                theirReps: options.getString('their_reps'),
-                dcLink: options.getString('discord'),
-                robloxLink: options.getString('roblox')
+            const group = options.getString('group');
+            const ourReps = options.getString('our_reps');
+            const theirReps = options.getString('their_reps');
+            const dcLink = options.getString('discord');
+            const robloxLink = options.getString('roblox');
+            const publicChannel = options.getChannel('public_channel');
+
+            const alliance = {
+                group,
+                ourReps,
+                theirReps,
+                dcLink,
+                robloxLink
             };
 
-            alliances.push(data);
-            fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
-            log('Added', data.group);
-            return interaction.editReply('✅ Alliance added');
+            alliances.push(alliance);
+            fs.writeFileSync(ALLIANCE_FILE, JSON.stringify(alliances, null, 2));
+
+            /* LOG FORMAT */
+            if (logChannel) {
+                const embed = new EmbedBuilder()
+                    .setTitle('New Alliance Added')
+                    .setColor('Green')
+                    .addFields(
+                        { name: 'Group', value: group },
+                        { name: 'Our Reps', value: ourReps },
+                        { name: 'Their Reps', value: theirReps },
+                        { name: 'Discord Link', value: dcLink },
+                        { name: 'Roblox Link', value: robloxLink }
+                    )
+                    .setFooter({ text: `Added by ${member.user.tag}` })
+                    .setTimestamp();
+
+                logChannel.send({ embeds: [embed] });
+            }
+
+            /* PUBLIC WELCOME MESSAGE */
+            if (publicChannel) {
+                const reps = ourReps
+                    .split(/[\s,]+/)
+                    .filter(r => r.startsWith('<@'));
+
+                const welcomeMessage =
+`:tada: **Welcome New Alliance! | Kavi Café x ${group}** :tada:
+
+We’re thrilled to officially welcome your community into an alliance with Kavi Café! ⭐
+This partnership is all about mutual growth, support, and fun — and we can’t wait to see what we’ll achieve together.
+
+:speech_balloon: **Questions & Support**
+If you have any questions, concerns, or suggestions, this is the perfect place to share them.
+
+:busts_in_silhouette:
+Please meet your Kavi Café representatives:
+
+${reps.map(r => `**•** ${r}`).join('\n')}
+
+:handshake: **Looking Ahead**
+We’re excited to build a strong, positive relationship between our communities.
+
+:coffee::sparkles: Here’s to a successful partnership between **Kavi Café** and **${group}!** :sparkles::coffee:`;
+
+                publicChannel.send({ content: welcomeMessage });
+            }
+
+            return interaction.editReply('✅ Alliance added successfully.');
         }
 
+        /* ===== LIST ===== */
         if (sub === 'list') {
-            if (!alliances.length) return interaction.editReply('No alliances found.');
+            if (!alliances.length)
+                return interaction.editReply('No alliances found.');
 
             const embed = new EmbedBuilder()
                 .setTitle('🌐 Current Alliances')
-                .setColor('Green');
+                .setColor('Blue');
 
             alliances.forEach(a => {
                 embed.addFields({
                     name: a.group,
                     value:
-                        `**Our Reps:** ${a.ourReps || 'N/A'}\n` +
-                        `**Their Reps:** ${a.theirReps || 'N/A'}\n` +
-                        `🔗 **Discord:** ${a.dcLink || 'N/A'}\n` +
-                        `🔗 **Roblox:** ${a.robloxLink || 'N/A'}`
+                        `**Our Reps:** ${a.ourReps}\n` +
+                        `**Their Reps:** ${a.theirReps}\n` +
+                        `🔗 **Discord:** ${a.dcLink}\n` +
+                        `🔗 **Roblox:** ${a.robloxLink}`
                 });
             });
 
             return interaction.editReply({ embeds: [embed] });
         }
 
+        /* ===== REMOVE ===== */
         if (sub === 'remove') {
-            const name = options.getString('group');
-            const index = alliances.findIndex(a => a.group.toLowerCase() === name.toLowerCase());
-            if (index === -1) return interaction.editReply('❌ Alliance not found.');
+            const group = options.getString('group');
+            const status = options.getString('status');
+            const reason = options.getString('reason');
+
+            const index = alliances.findIndex(a => a.group.toLowerCase() === group.toLowerCase());
+            if (index === -1)
+                return interaction.editReply('❌ Alliance not found.');
 
             alliances.splice(index, 1);
-            fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
-            log('Removed', name);
-            return interaction.editReply(`✅ Alliance "${name}" removed`);
+            fs.writeFileSync(ALLIANCE_FILE, JSON.stringify(alliances, null, 2));
+
+            if (logChannel) {
+                const embed = new EmbedBuilder()
+                    .setTitle('Alliance Removed')
+                    .setColor('Red')
+                    .addFields(
+                        { name: 'Group', value: group },
+                        { name: 'Status', value: status },
+                        { name: 'Reason', value: reason }
+                    )
+                    .setFooter({ text: `Removed by ${member.user.tag}` })
+                    .setTimestamp();
+
+                logChannel.send({ embeds: [embed] });
+            }
+
+            return interaction.editReply(`✅ Alliance "${group}" removed.`);
         }
-
-        if (sub === 'edit') {
-            const name = options.getString('group');
-            const a = alliances.find(x => x.group.toLowerCase() === name.toLowerCase());
-            if (!a) return interaction.editReply('❌ Alliance not found.');
-
-            if (options.getString('our_reps')) a.ourReps = options.getString('our_reps');
-            if (options.getString('their_reps')) a.theirReps = options.getString('their_reps');
-            if (options.getString('discord')) a.dcLink = options.getString('discord');
-            if (options.getString('roblox')) a.robloxLink = options.getString('roblox');
-
-            fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
-            log('Edited', name);
-            return interaction.editReply(`✅ Alliance "${name}" updated`);
-        }
-    }
-
-    /* ===== /staff discipline ===== */
-    if (commandName === 'staff') {
-        await interaction.deferReply({ ephemeral: true });
-
-        const target = options.getUser('member');
-        const action = options.getString('action');
-        const reason = options.getString('reason') || 'No reason provided';
-        const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
-
-        if (action === 'add') {
-            strikes.push({ user: target.id, reason, staff: member.user.tag, date: new Date().toLocaleString() });
-            fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
-        }
-
-        const dmEmbed = new EmbedBuilder()
-            .setTitle(action === 'remove' ? 'Notice of Removal' : 'Strike Notice')
-            .setColor(action === 'remove' ? 'Green' : 'Red')
-            .setDescription(
-                action === 'remove'
-                    ? `Your discipline has been removed at Kavià Cafe.\n\n**Reason:** ${reason}`
-                    : `You have received a strike at Kavià Cafe.\n\n**Reason:** ${reason}`
-            );
-
-        try { await target.send({ embeds: [dmEmbed] }); } catch {}
-
-        if (logChannel) {
-            const embed = new EmbedBuilder()
-                .setTitle('📌 Staff Discipline')
-                .setColor('Orange')
-                .addFields(
-                    { name: 'Member', value: `<@${target.id}>` },
-                    { name: 'Action', value: action },
-                    { name: 'Reason', value: reason },
-                    { name: 'Staff', value: `<@${member.user.id}>` },
-                    { name: 'Date', value: new Date().toLocaleString() }
-                );
-            logChannel.send({ embeds: [embed] });
-        }
-
-        return interaction.editReply('✅ Action completed');
     }
 });
 
