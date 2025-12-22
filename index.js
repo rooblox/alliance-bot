@@ -10,9 +10,7 @@ const {
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.DirectMessages
     ],
     partials: [Partials.Channel]
 });
@@ -36,38 +34,11 @@ client.once('ready', () => {
 });
 
 /* =======================
-   DM REPLY LOGGING
-======================= */
-client.on('messageCreate', async message => {
-    if (message.channel.type === 1 && !message.author.bot) { // DM
-        try {
-            const guild = client.guilds.cache.get(process.env.GUILD_ID);
-            if (!guild) return;
-
-            const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
-            if (!logChannel) return;
-
-            const embed = new EmbedBuilder()
-                .setTitle('📩 DM to Bot')
-                .setColor('Blue')
-                .addFields(
-                    { name: 'From', value: `<@${message.author.id}>` },
-                    { name: 'Message', value: message.content },
-                    { name: 'Sent At', value: new Date().toLocaleString() }
-                );
-
-            logChannel.send({ embeds: [embed] });
-        } catch (err) {
-            console.error(err);
-        }
-    }
-});
-
-/* =======================
    INTERACTIONS
 ======================= */
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
+
     const { commandName, options, guild, member } = interaction;
 
     /* ===== /dm ===== */
@@ -116,7 +87,7 @@ client.on('interactionCreate', async interaction => {
             alliances.push(newAlliance);
             fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
 
-            // Log in alliance-add channel
+            // Log in channel 'alliance-add' if exists
             const logChannel = guild.channels.cache.find(c => c.name === 'alliance-add');
             if (logChannel) {
                 const embed = new EmbedBuilder()
@@ -145,10 +116,10 @@ client.on('interactionCreate', async interaction => {
                 embed.addFields({
                     name: a.group,
                     value:
-                        `**Our Reps:** ${a.ourReps || 'N/A'}\n` +
-                        `**Their Reps:** ${a.theirReps || 'N/A'}\n` +
-                        `🔗 **Discord:** ${a.dcLink || 'N/A'}\n` +
-                        `🔗 **Roblox:** ${a.robloxLink || 'N/A'}`
+                        `**Our Reps:** ${a.ourReps}\n` +
+                        `**Their Reps:** ${a.theirReps}\n` +
+                        `🔗 **Discord:** ${a.dcLink}\n` +
+                        `🔗 **Roblox:** ${a.robloxLink}`
                 });
             });
 
@@ -159,18 +130,16 @@ client.on('interactionCreate', async interaction => {
             const groupName = options.getString('group');
             const index = alliances.findIndex(a => a.group.toLowerCase() === groupName.toLowerCase());
             if (index === -1) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
-
-            const removed = alliances.splice(index, 1)[0];
+            alliances.splice(index, 1);
             fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
 
-            // Log removal
             const logChannel = guild.channels.cache.find(c => c.name === 'alliance-add');
             if (logChannel) {
                 const embed = new EmbedBuilder()
-                    .setTitle('⚠️ Alliance Removed')
+                    .setTitle('❌ Alliance Removed')
                     .setColor('Red')
                     .addFields(
-                        { name: 'Group', value: removed.group },
+                        { name: 'Group', value: groupName },
                         { name: 'Status', value: 'Removed' }
                     );
                 logChannel.send({ embeds: [embed] });
@@ -198,7 +167,6 @@ client.on('interactionCreate', async interaction => {
 
             fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
 
-            // Log edit
             const logChannel = guild.channels.cache.find(c => c.name === 'alliance-add');
             if (logChannel) {
                 const embed = new EmbedBuilder()
@@ -219,7 +187,72 @@ client.on('interactionCreate', async interaction => {
     }
 
     /* ===== /staff ===== */
-    // Add your previous staff commands here (discipline, strikes, kicks, etc.)
+    if (commandName === 'staff') {
+        await interaction.deferReply({ ephemeral: true });
+        const sub = options.getSubcommand();
+        const target = options.getUser('member');
+        const action = options.getString('action');
+        const reason = options.getString('reason') || 'No reason provided';
+
+        if (sub === 'discipline') {
+            // DM embed for strikes
+            if (action === 'strike') {
+                const userStrikes = strikes.filter(s => s.user === target.id);
+                const strikeNumber = userStrikes.length + 1;
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('**Strike Notice**')
+                    .setColor('Red')
+                    .setDescription(`> Greetings, <@${target.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your **${strikeNumber}${strikeNumber === 1 ? 'st' : strikeNumber === 2 ? 'nd' : 'th'} strike.**\n\n> 🗒️ **Reason:** *${reason}*\n\nIf you feel like this was false or inaccurate please *open a ticket*.\n\n**Regards,**\n**Staff Team**\n**Kavià || Public Relations team**`);
+
+                try { await target.send({ embeds: [dmEmbed] }); } catch {}
+
+                strikes.push({
+                    user: target.id,
+                    reason,
+                    staff: member.user.tag,
+                    date: new Date().toLocaleString()
+                });
+                fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
+                return interaction.editReply(`⚠️ Strike added to ${target.tag}`);
+            }
+
+            if (action === 'remove') {
+                const index = strikes.findIndex(s => s.user === target.id);
+                if (index !== -1) {
+                    strikes.splice(index, 1);
+                    fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
+                    return interaction.editReply(`✅ Strike removed from ${target.tag}`);
+                } else {
+                    return interaction.editReply(`❌ No strikes found for ${target.tag}`);
+                }
+            }
+
+            if (action === 'kick') {
+                const guildMember = await guild.members.fetch(target.id);
+                if (!guildMember.kickable) return interaction.editReply('❌ Cannot kick this member.');
+                await guildMember.kick(reason);
+                return interaction.editReply(`❌ ${target.tag} has been kicked`);
+            }
+        }
+
+        if (sub === 'strikes') {
+            const userStrikes = strikes.filter(s => s.user === target.id);
+            if (!userStrikes.length) return interaction.editReply('No strikes found.');
+
+            const embed = new EmbedBuilder()
+                .setTitle(`⚠️ Strikes for ${target.tag}`)
+                .setColor('Red');
+
+            userStrikes.forEach((s, i) => {
+                embed.addFields({
+                    name: `Strike ${i + 1}`,
+                    value: `Reason: ${s.reason}\nBy: ${s.staff}\nDate: ${s.date}`
+                });
+            });
+
+            return interaction.editReply({ embeds: [embed] });
+        }
+    }
 });
 
 /* =======================
