@@ -1,5 +1,4 @@
 require('dotenv').config();
-const fs = require('fs');
 const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
@@ -12,28 +11,55 @@ const client = new Client({
     partials: [Partials.Channel]
 });
 
-/* =======================
-   DATA FILES
-======================= */
-let alliances = fs.existsSync('./alliances.json')
-    ? JSON.parse(fs.readFileSync('./alliances.json'))
-    : [];
+// In-memory alliances and message ID
+let alliances = [];
+let masterMessageId = null;
 
-let strikes = fs.existsSync('./staffStrikes.json')
-    ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
-    : [];
+// Update alliance list message
+async function updateAllianceMessage(guild) {
+    const channel = guild.channels.cache.find(c => c.name === 'alliances-list' && c.isTextBased());
+    if (!channel) return;
 
-/* =======================
-   READY EVENT
-======================= */
+    const embed = new EmbedBuilder()
+        .setTitle('🌐 Alliances')
+        .setColor('Green');
+
+    if (alliances.length === 0) {
+        embed.setDescription('No alliances currently.');
+    } else {
+        alliances.forEach(a => {
+            embed.addFields({
+                name: a.group,
+                value:
+                    `**Our Reps:** ${a.ourReps || 'N/A'}\n` +
+                    `**Their Reps:** ${a.theirReps || 'N/A'}\n` +
+                    `🔗 [Discord Link](${a.dcLink || '#'})\n` +
+                    `🔗 [Roblox Link](${a.robloxLink || '#'})`
+            });
+        });
+    }
+
+    if (masterMessageId) {
+        try {
+            const msg = await channel.messages.fetch(masterMessageId);
+            await msg.edit({ embeds: [embed] });
+        } catch {
+            const msg = await channel.send({ embeds: [embed] });
+            masterMessageId = msg.id;
+        }
+    } else {
+        const msg = await channel.send({ embeds: [embed] });
+        masterMessageId = msg.id;
+    }
+}
+
+// Ready event
 client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-/* =======================
-   DM LOGGING
-======================= */
-client.on('messageCreate', async (message) => {
+// DM logging
+client.on('messageCreate', async message => {
     if (!message.guild && !message.author.bot) {
         const logChannel = client.channels.cache.find(c => c.name === 'dm-logs');
         if (!logChannel) return;
@@ -51,14 +77,51 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-/* =======================
-   INTERACTIONS
-======================= */
-client.on('interactionCreate', async (interaction) => {
+// Interaction handler
+client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
-    const { commandName, options, member, guild } = interaction;
+    const { commandName, options, guild, member } = interaction;
 
     try {
+        /* ===== /status ===== */
+        if (commandName === 'status') {
+            await interaction.deferReply({ ephemeral: true });
+            const statusText = options.getString('text') || 'Kavi Café';
+            await client.user.setPresence({
+                activities: [{ name: statusText, type: 0 }]
+            });
+            return interaction.editReply(`✅ Status updated: Playing ${statusText}`);
+        }
+
+        /* ===== /dm ===== */
+        if (commandName === 'dm') {
+            await interaction.deferReply({ ephemeral: true });
+            const user = options.getUser('user');
+            const message = options.getString('message');
+
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('📩 Staff Message')
+                .setDescription(message)
+                .setColor('Blue');
+
+            try { await user.send({ embeds: [dmEmbed] }); } catch {}
+
+            const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
+            if (logChannel) {
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('📩 Staff Message')
+                    .setColor('Blue')
+                    .addFields(
+                        { name: 'To', value: `<@${user.id}>` },
+                        { name: 'Message', value: message },
+                        { name: 'Sent By', value: `<@${member.user.id}>` },
+                        { name: 'Sent At', value: new Date().toLocaleString() }
+                    );
+                logChannel.send({ embeds: [logEmbed] });
+            }
+
+            return interaction.editReply('✅ DM sent');
+        }
 
         /* ===== /alliance ===== */
         if (commandName === 'alliance') {
@@ -69,30 +132,14 @@ client.on('interactionCreate', async (interaction) => {
                 const group = options.getString('group');
                 const ourReps = options.getString('our_reps');
                 const theirReps = options.getString('their_reps');
-                const dcLink = options.getString('discord');
-                const robloxLink = options.getString('roblox');
+                const dcLink = (options.getString('discord') || '').trim();
+                const robloxLink = (options.getString('roblox') || '').trim();
                 const publicChannel = options.getChannel('public_channel') || null;
 
                 alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
-                fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
+                await updateAllianceMessage(guild);
 
-                // Log in alliance-add channel
-                const logChannel = guild.channels.cache.find(c => c.name === 'alliance-add');
-                if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setTitle('New Alliance Added')
-                        .setColor('Green')
-                        .addFields(
-                            { name: 'Group', value: group },
-                            { name: 'Our Reps', value: ourReps },
-                            { name: 'Their Reps', value: theirReps },
-                            { name: 'Discord Link', value: dcLink ? `[Click Here](${dcLink})` : 'N/A' },
-                            { name: 'Roblox Link', value: robloxLink ? `[Click Here](${robloxLink})` : 'N/A' }
-                        );
-                    logChannel.send({ embeds: [logEmbed] });
-                }
-
-                // Send welcome message to public channel
+                // Optional welcome message
                 if (publicChannel && publicChannel.isTextBased()) {
                     const welcome = `:tada: **Welcome New Alliance! | Kavi Café x ${group}** :tada:
 
@@ -101,58 +148,12 @@ We’re thrilled to officially welcome your community into an alliance with Kavi
 :busts_in_silhouette: Please meet your Kavi Café representatives:
 ${ourReps.split(/,| /).filter(Boolean).map(u => `**•** ${u}`).join('\n')}
 
-:handshake: **Looking Ahead**
-We’re excited to be working together and building a strong, positive relationship.
-
-:coffee::sparkles: Here’s to a successful partnership between **Kavi Café** and **${group}**! :sparkles::coffee:`;
+:handshake: Looking forward to a great partnership with **${group}**!`;
 
                     publicChannel.send(welcome);
                 }
 
-                return interaction.editReply(`✅ Alliance **${group}** added successfully.`);
-            }
-
-            if (sub === 'list') {
-                if (!alliances.length) return interaction.editReply('❌ No alliances found.');
-
-                const embed = new EmbedBuilder()
-                    .setTitle('🌐 Alliances')
-                    .setColor('Green');
-
-                alliances.forEach(a => {
-                    embed.addFields({
-                        name: a.group,
-                        value:
-                            `**Our Reps:** ${a.ourReps || 'N/A'}\n` +
-                            `**Their Reps:** ${a.theirReps || 'N/A'}\n` +
-                            `🔗 Discord: ${a.dcLink ? `[Click Here](${a.dcLink})` : 'N/A'}\n` +
-                            `🔗 Roblox: ${a.robloxLink ? `[Click Here](${a.robloxLink})` : 'N/A'}`
-                    });
-                });
-
-                return interaction.editReply({ embeds: [embed] });
-            }
-
-            if (sub === 'remove') {
-                const groupName = options.getString('group');
-                const index = alliances.findIndex(a => a.group.toLowerCase() === groupName.toLowerCase());
-                if (index === -1) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
-                alliances.splice(index, 1);
-                fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
-
-                const logChannel = guild.channels.cache.find(c => c.name === 'alliance-add');
-                if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setTitle('Alliance Removed')
-                        .setColor('Red')
-                        .addFields(
-                            { name: 'Group', value: groupName },
-                            { name: 'Status', value: 'Removed' }
-                        );
-                    logChannel.send({ embeds: [logEmbed] });
-                }
-
-                return interaction.editReply(`✅ Alliance "${groupName}" removed.`);
+                return interaction.editReply(`✅ Alliance **${group}** added.`);
             }
 
             if (sub === 'edit') {
@@ -163,8 +164,8 @@ We’re excited to be working together and building a strong, positive relations
                 const newGroup = options.getString('new_group');
                 const newOur = options.getString('our_reps');
                 const newTheir = options.getString('their_reps');
-                const newDiscord = options.getString('discord');
-                const newRoblox = options.getString('roblox');
+                const newDiscord = (options.getString('discord') || '').trim();
+                const newRoblox = (options.getString('roblox') || '').trim();
 
                 if (newGroup) alliance.group = newGroup;
                 if (newOur) alliance.ourReps = newOur;
@@ -172,28 +173,24 @@ We’re excited to be working together and building a strong, positive relations
                 if (newDiscord) alliance.dcLink = newDiscord;
                 if (newRoblox) alliance.robloxLink = newRoblox;
 
-                fs.writeFileSync('./alliances.json', JSON.stringify(alliances, null, 2));
-
-                const logChannel = guild.channels.cache.find(c => c.name === 'alliance-add');
-                if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setTitle('Alliance Edited')
-                        .setColor('Orange')
-                        .addFields(
-                            { name: 'Group', value: alliance.group },
-                            { name: 'Our Reps', value: alliance.ourReps },
-                            { name: 'Their Reps', value: alliance.theirReps },
-                            { name: 'Discord Link', value: alliance.dcLink ? `[Click Here](${alliance.dcLink})` : 'N/A' },
-                            { name: 'Roblox Link', value: alliance.robloxLink ? `[Click Here](${alliance.robloxLink})` : 'N/A' }
-                        );
-                    logChannel.send({ embeds: [logEmbed] });
-                }
-
+                await updateAllianceMessage(guild);
                 return interaction.editReply(`✅ Alliance "${alliance.group}" updated.`);
+            }
+
+            if (sub === 'remove') {
+                const groupName = options.getString('group');
+                alliances = alliances.filter(a => a.group.toLowerCase() !== groupName.toLowerCase());
+                await updateAllianceMessage(guild);
+                return interaction.editReply(`✅ Alliance "${groupName}" removed.`);
+            }
+
+            if (sub === 'list') {
+                await updateAllianceMessage(guild);
+                return interaction.editReply('✅ Alliance list updated in #alliances-list.');
             }
         }
 
-        /* ===== /rep ===== */
+        /* ===== /rep request ===== */
         if (commandName === 'rep') {
             await interaction.deferReply({ ephemeral: true });
             const sub = options.getSubcommand();
@@ -204,35 +201,25 @@ We’re excited to be working together and building a strong, positive relations
                 const robloxLink = options.getString('roblox_link');
                 const allianceLink = options.getString('alliance_link');
 
-                const logChannel = guild.channels.cache.find(c => c.name === 'request-new-rep');
-                if (logChannel && logChannel.isTextBased()) {
-                    const embed = new EmbedBuilder()
-                        .setTitle('📥 New Rep Request')
-                        .setColor('Blue')
-                        .addFields(
-                            { name: 'Requested By', value: `<@${member.user.id}>` },
-                            { name: 'Number of Reps', value: `${numReps}` },
-                            { name: 'Discord Link', value: discordLink ? `[Click Here](${discordLink})` : 'N/A' },
-                            { name: 'Roblox Link', value: robloxLink ? `[Click Here](${robloxLink})` : 'N/A' },
-                            { name: 'Alliance Link', value: allianceLink ? `[Click Here](${allianceLink})` : 'N/A' },
-                            { name: '📌 Instructions', value: 'When adding yourself to an alliance, make sure you give yourself the correct alliance roles. This is very important.' },
-                            { name: 'Date', value: new Date().toLocaleString() }
-                        );
-                    logChannel.send({ embeds: [embed] });
-                }
+                const channel = guild.channels.cache.find(c => c.name === 'request-new-rep' && c.isTextBased());
+                if (!channel) return interaction.editReply('❌ Channel #request-new-rep not found.');
 
-                return interaction.editReply('✅ Your rep request has been sent.');
+                const embed = new EmbedBuilder()
+                    .setTitle('📥 New Rep Request')
+                    .setColor('Blue')
+                    .addFields(
+                        { name: 'Requested By', value: `<@${member.user.id}>` },
+                        { name: 'Number of Reps', value: `${numReps}` },
+                        { name: 'Discord Link', value: discordLink || 'N/A' },
+                        { name: 'Roblox Link', value: robloxLink || 'N/A' },
+                        { name: 'Alliance Link', value: allianceLink || 'N/A' },
+                        { name: '📌 Instructions', value: 'When adding yourself to an alliance, make sure you give yourself the correct alliance roles. This is very important.' },
+                        { name: 'Date', value: new Date().toLocaleString() }
+                    );
+
+                await channel.send({ embeds: [embed] });
+                return interaction.editReply('✅ Rep request sent to #request-new-rep.');
             }
-        }
-
-        /* ===== /status ===== */
-        if (commandName === 'status') {
-            await interaction.deferReply({ ephemeral: true });
-            const statusText = options.getString('text') || 'Kavi Café';
-            await client.user.setPresence({
-                activities: [{ name: statusText, type: 0 }]
-            });
-            return interaction.editReply(`✅ Status updated: Playing ${statusText}`);
         }
 
     } catch (err) {
@@ -245,7 +232,4 @@ We’re excited to be working together and building a strong, positive relations
     }
 });
 
-/* =======================
-   LOGIN
-======================= */
 client.login(process.env.TOKEN);
