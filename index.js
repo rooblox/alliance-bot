@@ -165,8 +165,8 @@ client.on('interactionCreate', async (interaction) => {
                 const group = options.getString('group');
                 const ourReps = options.getString('our_reps');
                 const theirReps = options.getString('their_reps');
-                const dcLink = options.getString('discord') || 'N/A';
-                const robloxLink = options.getString('roblox') || 'N/A';
+               const dcLink = options.getString('discord_link') || 'N/A';
+               const robloxLink = options.getString('roblox_link') || 'N/A';
                 const publicChannel = options.getChannel('public_channel') || null;
 
                 alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
@@ -209,9 +209,8 @@ ${ourReps.split(/,| /).filter(Boolean).map(u => `• ${u}`).join('\n')}
                 const newGroup = options.getString('new_group');
                 const newOur = options.getString('our_reps');
                 const newTheir = options.getString('their_reps');
-                const newDiscord = options.getString('discord');
-                const newRoblox = options.getString('roblox');
-
+                const newDiscord = options.getString('discord_link');
+                const newRoblox = options.getString('roblox_link');
                 if (newGroup) alliance.group = newGroup;
                 if (newOur) alliance.ourReps = newOur;
                 if (newTheir) alliance.theirReps = newTheir;
