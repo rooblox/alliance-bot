@@ -48,12 +48,16 @@ client.on('interactionCreate', async interaction => {
         const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
 
         // Send embed to user
-        const dmEmbed = new EmbedBuilder()
-            .setTitle('📩 Staff Message')
-            .setDescription(messageText)
-            .setColor('Blue')
-            .setTimestamp();
-        await user.send({ embeds: [dmEmbed] }).catch(() => null);
+        try {
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('📩 Staff Message')
+                .setDescription(messageText)
+                .setColor('Blue')
+                .setTimestamp();
+            await user.send({ embeds: [dmEmbed] });
+        } catch {
+            console.warn(`Could not DM ${user.tag}`);
+        }
 
         // Log message to dm-logs
         if (logChannel) {
@@ -82,16 +86,23 @@ client.on('interactionCreate', async interaction => {
 
             try {
                 const staffUser = options.getUser('user');
+                if (!staffUser) return interaction.editReply({ content: '❌ User not found.' });
+
                 const reason = options.getString('reason') || 'No reason provided';
 
+                // Initialize strike count
                 if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
                 staffStrikes[staffUser.id]++;
-                fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
+                try {
+                    fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
+                } catch (err) {
+                    console.error('Error writing staffStrikes.json:', err);
+                }
 
                 const strikeCount = staffStrikes[staffUser.id];
                 const ordinal = ['1st','2nd','3rd'][strikeCount-1] || `${strikeCount}th`;
 
-                // DM staff member
+                // DM staff member (safe)
                 try {
                     const dmEmbed = new EmbedBuilder()
                         .setTitle('Strike Notice')
@@ -99,7 +110,7 @@ client.on('interactionCreate', async interaction => {
                         .setColor('Red')
                         .setTimestamp();
                     await staffUser.send({ embeds: [dmEmbed] });
-                } catch (err) {
+                } catch {
                     console.warn(`Could not DM ${staffUser.tag}`);
                 }
 
