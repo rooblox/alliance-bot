@@ -24,7 +24,7 @@ client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-/* ================== ALLIANCE STORAGE ================== */
+/* ================== STORAGE ================== */
 let alliances = [];
 let staffStrikes = fs.existsSync('./staffStrikes.json')
     ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
@@ -38,9 +38,8 @@ client.on('interactionCreate', async interaction => {
 
     /* ========= /STATUS ========= */
     if (commandName === 'status') {
-        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator))
             return interaction.reply({ content: '❌ Admin only.', ephemeral: true });
-        }
         const text = options.getString('text');
         client.user.setActivity(text, { type: ActivityType.Playing });
         return interaction.reply({ content: '✅ Status updated.', ephemeral: true });
@@ -48,9 +47,10 @@ client.on('interactionCreate', async interaction => {
 
     /* ========= /DM ========= */
     if (commandName === 'dm') {
-        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator))
             return interaction.reply({ content: '❌ Admin only.', ephemeral: true });
-        }
+
+        await interaction.deferReply({ ephemeral: true });
 
         const user = options.getUser('user');
         const messageText = options.getString('message');
@@ -79,16 +79,18 @@ client.on('interactionCreate', async interaction => {
             logChannel.send({ embeds: [logEmbed] });
         }
 
-        return interaction.reply({ content: '✅ DM sent.', ephemeral: true });
+        return interaction.editReply({ content: '✅ DM sent.' });
     }
 
-    /* ========= /STAFF DISCIPLINE ========= */
+    /* ========= /STAFF DISCIPLINE & STRIKES ========= */
     if (commandName === 'staff') {
         const sub = options.getSubcommand();
         const staffUser = options.getUser('user');
         const reason = options.getString('reason') || 'No reason provided';
 
         if (sub === 'discipline') {
+            await interaction.deferReply({ ephemeral: true });
+
             if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
             staffStrikes[staffUser.id]++;
             fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
@@ -97,13 +99,17 @@ client.on('interactionCreate', async interaction => {
             const ordinal = ['1st','2nd','3rd'][strikeCount-1] || `${strikeCount}th`;
 
             // DM staff member
-            const dmChannel = await staffUser.createDM();
-            const dmEmbed = new EmbedBuilder()
-                .setTitle('Strike Notice')
-                .setDescription(`Greetings, <@${staffUser.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
-                .setColor('Red')
-                .setTimestamp();
-            await dmChannel.send({ embeds: [dmEmbed] }).catch(() => null);
+            try {
+                const dmChannel = await staffUser.createDM();
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('Strike Notice')
+                    .setDescription(`Greetings, <@${staffUser.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
+                    .setColor('Red')
+                    .setTimestamp();
+                await dmChannel.send({ embeds: [dmEmbed] });
+            } catch (err) {
+                console.warn(`Failed to DM ${staffUser.tag}`);
+            }
 
             // Log to staff-discipline channel
             const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
@@ -122,7 +128,7 @@ client.on('interactionCreate', async interaction => {
                 logChannel.send({ embeds: [logEmbed] });
             }
 
-            return interaction.reply({ content: `✅ Added strike to ${staffUser.tag} (${ordinal})`, ephemeral: true });
+            return interaction.editReply({ content: `✅ Added strike to ${staffUser.tag} (${ordinal})` });
         }
 
         if (sub === 'strikes') {
@@ -135,6 +141,8 @@ client.on('interactionCreate', async interaction => {
 
     /* ========= /REP REQUEST ========= */
     if (commandName === 'rep' && options.getSubcommand() === 'request') {
+        await interaction.deferReply({ ephemeral: true });
+
         const num = options.getInteger('num_reps');
         const dc = options.getString('discord_link');
         const roblox = options.getString('roblox_link');
@@ -142,7 +150,7 @@ client.on('interactionCreate', async interaction => {
 
         const channel = guild.channels.cache.find(c => c.name === 'rep-requests');
         const prRole = guild.roles.cache.find(r => r.name === '[PR] | Staff Role');
-        if (!channel) return interaction.reply({ content: '❌ rep-requests channel missing.', ephemeral: true });
+        if (!channel) return interaction.editReply({ content: '❌ rep-requests channel missing.' });
 
         const embed = new EmbedBuilder()
             .setTitle('📥 New Rep Request')
@@ -158,7 +166,7 @@ client.on('interactionCreate', async interaction => {
             .setTimestamp();
 
         await channel.send({ content: prRole ? `<@&${prRole.id}>` : '', embeds: [embed] });
-        return interaction.reply({ content: '✅ Rep request sent.', ephemeral: true });
+        return interaction.editReply({ content: '✅ Rep request sent.' });
     }
 
     /* ========= /ALLIANCE ========= */
@@ -169,12 +177,8 @@ client.on('interactionCreate', async interaction => {
             const group = options.getString('group');
             const ourReps = options.getString('our_reps');
             const theirReps = options.getString('their_reps');
-            const dcLink =
-                options.getString('discord_link') ||
-                options.getString('dc_link');
-            const robloxLink =
-                options.getString('roblox_link') ||
-                options.getString('roblox');
+            const dcLink = options.getString('discord_link') || options.getString('dc_link');
+            const robloxLink = options.getString('roblox_link') || options.getString('roblox');
             const publicChannel = options.getChannel('public_channel');
 
             alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
@@ -191,7 +195,6 @@ client.on('interactionCreate', async interaction => {
                         { name: 'Roblox Link', value: robloxLink || 'None' }
                     )
                     .setTimestamp();
-
                 await listChannel.send({ embeds: [embed] });
             }
 
