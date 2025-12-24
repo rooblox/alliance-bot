@@ -32,7 +32,6 @@ client.on('messageCreate', async message => {
         const logChannel = client.channels.cache.find(c => c.name === 'dm-logs');
         if (!logChannel) return;
 
-        // Log incoming DM
         const embed = new EmbedBuilder()
             .setTitle('📩 DM Received')
             .setColor('Blue')
@@ -182,11 +181,11 @@ client.on('interactionCreate', async interaction => {
                         `We’re thrilled to officially welcome your community into an alliance with Kavi Café! :star2:\n` +
                         `This partnership is all about mutual growth, support, and fun — and we can’t wait to see what we’ll achieve together.\n\n` +
                         `:speech_balloon: Questions & Support\n` +
-                        `If you have any questions, concerns, or suggestions, this is the perfect place to share them. We value communication and want to make sure both of our communities get the most out of this partnership.\n\n` +
+                        `If you have any questions, concerns, or suggestions, this is the perfect place to share them.\n\n` +
                         `:busts_in_silhouette: Please meet your Kavi Café representatives:\n` +
                         ourReps.split(/,| /).filter(Boolean).map(r => `• ${r}`).join('\n') + '\n\n' +
                         `:handshake: Looking Ahead\n` +
-                        `We’re so excited to be working together and building a strong, positive relationship between our communities. Expect fun events, cross-community opportunities, and lasting connections.\n\n` +
+                        `We’re so excited to be working together and building a strong, positive relationship between our communities.\n\n` +
                         `:coffee::sparkles: Here’s to a successful partnership between Kavi Café and ${group}! :sparkles::coffee:`
                     );
                 }
@@ -215,72 +214,75 @@ client.on('interactionCreate', async interaction => {
             // ---- Discipline ----
             if (sub === 'discipline') {
                 await interaction.deferReply({ ephemeral: true });
-                try {
-                    const targetUser = options.getUser('user');
-                    const reason = options.getString('reason');
 
-                    if (!targetUser) return interaction.editReply('❌ User not found.');
+                const targetUser = options.getUser('user');
+                const reason = options.getString('reason');
 
-                    let staffMember = null;
-                    if (guild) staffMember = await guild.members.fetch(targetUser.id).catch(() => null);
-                    const target = staffMember || targetUser;
+                if (!targetUser) return interaction.editReply('❌ User not found.');
 
-                    let strikeData = strikes.find(s => s.id === target.id);
-                    if (!strikeData) {
-                        strikeData = { id: target.id, count: 0, history: [] };
-                        strikes.push(strikeData);
-                    }
-                    strikeData.count += 1;
-                    strikeData.history.push({ reason, date: new Date().toISOString() });
-                    fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 4));
-
-                    try {
-                        await target.send({
-                            embeds: [
-                                new EmbedBuilder()
-                                    .setTitle('Strike Notice')
-                                    .setColor('Red')
-                                    .setDescription(
-                                        `Greetings, <@${target.id}>\n\n` +
-                                        `I'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe.\n` +
-                                        `This is your ${strikeData.count}${strikeData.count === 1 ? 'st' : strikeData.count === 2 ? 'nd' : 'th'} strike.\n\n` +
-                                        `🗒️ Reason: ${reason}\n\n` +
-                                        `If you feel like this was false or inaccurate please open a ticket.\n\n` +
-                                        `Regards,\nStaff Team\nKavià | Public Relations team`
-                                    )
-                            ]
-                        });
-                    } catch {}
-
-                    const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
-                    if (logChannel) {
-                        await logChannel.send({
-                            embeds: [
-                                new EmbedBuilder()
-                                    .setTitle('📌 Staff Discipline')
-                                    .setColor('Red')
-                                    .addFields(
-                                        { name: 'Staff', value: `<@${target.id}>` },
-                                        { name: 'Reason', value: reason },
-                                        { name: 'Strike Number', value: String(strikeData.count) },
-                                        { name: 'By', value: `<@${member.user.id}>` },
-                                        { name: 'Date', value: new Date().toLocaleString() }
-                                    )
-                            ]
-                        });
-                    }
-
-                    return interaction.editReply(`✅ Strike added to <@${target.id}>.`);
-                } catch (err) {
-                    console.error('Staff discipline error:', err);
-                    return interaction.editReply('❌ An error occurred while adding the strike.');
+                // Update strikes
+                let strikeData = strikes.find(s => s.id === targetUser.id);
+                if (!strikeData) {
+                    strikeData = { id: targetUser.id, count: 0, history: [] };
+                    strikes.push(strikeData);
                 }
+                strikeData.count += 1;
+                strikeData.history.push({ reason, date: new Date().toISOString() });
+                fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 4));
+
+                // DM user
+                try {
+                    await targetUser.send({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setTitle('Strike Notice')
+                                .setColor('Red')
+                                .setDescription(
+                                    `Greetings, <@${targetUser.id}>\n\n` +
+                                    `You have received a strike for your actions at Kavià Cafe.\n` +
+                                    `This is your ${strikeData.count}${strikeData.count === 1 ? 'st' : strikeData.count === 2 ? 'nd' : 'th'} strike.\n\n` +
+                                    `🗒️ Reason: ${reason}\n\n` +
+                                    `If you feel this is inaccurate, please open a ticket.\n\n` +
+                                    `Regards,\nStaff Team\nKavià | Public Relations team`
+                                )
+                        ]
+                    });
+                } catch {}
+
+                // Log to staff-discipline
+                const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
+                if (logChannel) {
+                    await logChannel.send({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setTitle('📌 Staff Discipline')
+                                .setColor('Red')
+                                .addFields(
+                                    { name: 'Staff', value: `<@${targetUser.id}>` },
+                                    { name: 'Reason', value: reason },
+                                    { name: 'Strike Number', value: String(strikeData.count) },
+                                    { name: 'By', value: `<@${member.user.id}>` },
+                                    { name: 'Date', value: new Date().toLocaleString() }
+                                )
+                        ]
+                    });
+                }
+
+                return interaction.editReply(`✅ Strike added to <@${targetUser.id}>.`);
             }
 
             // ---- View Strikes ----
             if (sub === 'strikes') {
-                const list = strikes.map(s => `<@${s.id}> - ${s.count} strike(s)`).join('\n') || 'No strikes recorded.';
-                return interaction.reply({ content: list, ephemeral: true });
+                const targetUser = options.getUser('user');
+                if (!targetUser) return interaction.reply({ content: '❌ User not found.', ephemeral: true });
+
+                const strikeData = strikes.find(s => s.id === targetUser.id);
+                const msg = strikeData
+                    ? `User <@${targetUser.id}> has ${strikeData.count} strike(s).\n` +
+                      strikeData.history.map((h, i) => `${i + 1}. ${h.reason} (${new Date(h.date).toLocaleString()})`).join('\n')
+                    : 'No strikes found for this user.';
+
+                return interaction.reply({ content: msg, ephemeral: true });
             }
         }
 
