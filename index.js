@@ -19,7 +19,7 @@ const client = new Client({
 });
 
 /* ================== READY ================== */
-client.once('clientReady', () => {
+client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
@@ -113,8 +113,14 @@ client.on('interactionCreate', async interaction => {
             const group = options.getString('group');
             const ourReps = options.getString('our_reps');
             const theirReps = options.getString('their_reps');
-            const dcLink = options.getString('discord_link');
-            const robloxLink = options.getString('roblox_link');
+
+            // 🔒 HANDLE BOTH OLD AND NEW OPTION NAMES
+            const dcLink =
+                options.getString('discord_link') ||
+                options.getString('dc_link');
+            const robloxLink =
+                options.getString('roblox_link') ||
+                options.getString('roblox');
 
             alliances.push({
                 group,
