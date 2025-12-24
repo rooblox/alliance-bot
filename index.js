@@ -59,9 +59,19 @@ async function updateAllianceList(channel) {
         } catch {}
     }
 
-    const msg = await channel.send({ embeds: [embed] });
-    allianceListMessageId = msg.id;
+    const prRole = guild.roles.cache.find(r => r.name === '[PR] | Staff Role');
+    if (!prRole) {
+  console.warn('[WARN] PR role not found, skipping role ping');
 }
+
+    const msg = await channel.send({
+        content: prRole ? `<@&${prRole.id}>` : null,
+        embeds: [embed],
+        allowedMentions: { roles: prRole ? [prRole.id] : [] }
+});
+
+allianceListMessageId = msg.id;
+
 
 /* =======================
    READY
@@ -185,14 +195,23 @@ client.on('interactionCreate', async (interaction) => {
 
             /* === ADD === */
             if (sub === 'add') {
-                const group = options.getString('group');
-                const ourReps = options.getString('our_reps');
-                const theirReps = options.getString('their_reps');
-                const dcLink = options.getString('discord_link');
-                const robloxLink = options.getString('roblox_link');
-                const publicChannel = options.getChannel('public_channel');
+            const group = options.getString('group');
+            const ourReps = options.getString('our_reps');
+            const theirReps = options.getString('their_reps');
 
-                alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
+            const dcLinkRaw =
+                options.getString('discord_link') ||
+                options.getString('discord') ||
+                options.getString('discord_invite');
+
+            const dcLink = normalizeUrl(dcLinkRaw);
+
+            const robloxLink = options.getString('roblox_link');
+            const publicChannel = options.getChannel('public_channel');
+
+            alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
+        }
+
 
                 if (publicChannel?.isTextBased()) {
                     publicChannel.send(
