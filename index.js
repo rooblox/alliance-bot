@@ -76,55 +76,60 @@ client.on('interactionCreate', async interaction => {
     /* ========= /STAFF DISCIPLINE & STRIKES ========= */
     if (commandName === 'staff') {
         const sub = options.getSubcommand();
-        const staffUser = options.getUser('user');
-        const reason = options.getString('reason') || 'No reason provided';
 
         if (sub === 'discipline') {
             await interaction.deferReply({ ephemeral: true });
 
-            if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
-            staffStrikes[staffUser.id]++;
-            fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
-
-            const strikeCount = staffStrikes[staffUser.id];
-            const ordinal = ['1st','2nd','3rd'][strikeCount-1] || `${strikeCount}th`;
-
-            // DM staff member
             try {
-                const dmChannel = await staffUser.createDM();
-                const dmEmbed = new EmbedBuilder()
-                    .setTitle('Strike Notice')
-                    .setDescription(`Greetings, <@${staffUser.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
-                    .setColor('Red')
-                    .setTimestamp();
-                await dmChannel.send({ embeds: [dmEmbed] });
-            } catch (err) {
-                console.warn(`Failed to DM ${staffUser.tag}`);
-            }
+                const staffUser = options.getUser('user');
+                const reason = options.getString('reason') || 'No reason provided';
 
-            // Log to staff-discipline channel
-            try {
-                const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
-                if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setTitle('📌 Staff Discipline')
-                        .addFields(
-                            { name: 'Staff Member', value: `<@${staffUser.id}>` },
-                            { name: 'Strike Number', value: `${strikeCount}` },
-                            { name: 'Reason', value: reason },
-                            { name: 'Given By', value: `<@${interaction.user.id}>` },
-                            { name: 'Date', value: new Date().toLocaleString() }
-                        )
+                if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
+                staffStrikes[staffUser.id]++;
+                fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
+
+                const strikeCount = staffStrikes[staffUser.id];
+                const ordinal = ['1st','2nd','3rd'][strikeCount-1] || `${strikeCount}th`;
+
+                // DM staff member
+                try {
+                    const dmEmbed = new EmbedBuilder()
+                        .setTitle('Strike Notice')
+                        .setDescription(`Greetings, <@${staffUser.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
                         .setColor('Red')
                         .setTimestamp();
-                    logChannel.send({ embeds: [logEmbed] });
+                    await staffUser.send({ embeds: [dmEmbed] });
+                } catch (err) {
+                    console.warn(`Could not DM ${staffUser.tag}`);
                 }
-            } catch(err) {
-                console.warn('Failed to log staff discipline:', err);
-            }
 
-            // Respond to interaction
-            return interaction.editReply({ content: `✅ Added strike to ${staffUser.tag} (${ordinal})` });
+                // Log to staff-discipline channel
+                try {
+                    const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
+                    if (logChannel) {
+                        const logEmbed = new EmbedBuilder()
+                            .setTitle('📌 Staff Discipline')
+                            .addFields(
+                                { name: 'Staff Member', value: `<@${staffUser.id}>` },
+                                { name: 'Strike Number', value: `${strikeCount}` },
+                                { name: 'Reason', value: reason },
+                                { name: 'Given By', value: `<@${interaction.user.id}>` },
+                                { name: 'Date', value: new Date().toLocaleString() }
+                            )
+                            .setColor('Red')
+                            .setTimestamp();
+                        await logChannel.send({ embeds: [logEmbed] });
+                    }
+                } catch(err) {
+                    console.warn('Could not log staff discipline:', err);
+                }
+
+                return interaction.editReply({ content: `✅ Added strike to ${staffUser.tag} (${ordinal})` });
+
+            } catch (err) {
+                console.error('Staff discipline error:', err);
+                return interaction.editReply({ content: '❌ An error occurred while adding strike.' });
+            }
         }
 
         if (sub === 'strikes') {
