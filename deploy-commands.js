@@ -9,7 +9,10 @@ commands.push(
         .setName('status')
         .setDescription('Change bot status')
         .addStringOption(o =>
-            o.setName('text').setDescription('Status text').setRequired(true))
+            o.setName('text')
+             .setDescription('Status text')
+             .setRequired(true)
+        )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON()
 );
@@ -19,8 +22,16 @@ commands.push(
     new SlashCommandBuilder()
         .setName('dm')
         .setDescription('Send a DM via the bot')
-        .addUserOption(o => o.setName('user').setRequired(true))
-        .addStringOption(o => o.setName('message').setRequired(true))
+        .addUserOption(o =>
+            o.setName('user')
+             .setDescription('User to DM')
+             .setRequired(true)
+        )
+        .addStringOption(o =>
+            o.setName('message')
+             .setDescription('Message to send')
+             .setRequired(true)
+        )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON()
 );
@@ -33,10 +44,26 @@ commands.push(
         .addSubcommand(sub =>
             sub.setName('request')
                 .setDescription('Request reps')
-                .addIntegerOption(o => o.setName('num_reps').setRequired(true))
-                .addStringOption(o => o.setName('discord_link').setRequired(true))
-                .addStringOption(o => o.setName('roblox_link').setRequired(true))
-                .addStringOption(o => o.setName('alliance_link').setRequired(true))
+                .addIntegerOption(o =>
+                    o.setName('num_reps')
+                     .setDescription('Number of reps requested')
+                     .setRequired(true)
+                )
+                .addStringOption(o =>
+                    o.setName('discord_link')
+                     .setDescription('Discord server link')
+                     .setRequired(true)
+                )
+                .addStringOption(o =>
+                    o.setName('roblox_link')
+                     .setDescription('Roblox group link')
+                     .setRequired(true)
+                )
+                .addStringOption(o =>
+                    o.setName('alliance_link')
+                     .setDescription('Alliance information link')
+                     .setRequired(true)
+                )
         )
         .toJSON()
 );
@@ -48,19 +75,50 @@ commands.push(
         .setDescription('Alliance management')
         .addSubcommand(sub =>
             sub.setName('add')
-                .addStringOption(o => o.setName('group').setRequired(true))
-                .addStringOption(o => o.setName('our_reps').setRequired(true))
-                .addStringOption(o => o.setName('their_reps').setRequired(true))
-                .addStringOption(o => o.setName('discord_link'))
-                .addStringOption(o => o.setName('roblox_link'))
-                .addChannelOption(o => o.setName('public_channel'))
+                .setDescription('Add a new alliance')
+                .addStringOption(o =>
+                    o.setName('group')
+                     .setDescription('Alliance group name')
+                     .setRequired(true)
+                )
+                .addStringOption(o =>
+                    o.setName('our_reps')
+                     .setDescription('Our representatives')
+                     .setRequired(true)
+                )
+                .addStringOption(o =>
+                    o.setName('their_reps')
+                     .setDescription('Their representatives')
+                     .setRequired(true)
+                )
+                .addStringOption(o =>
+                    o.setName('discord_link')
+                     .setDescription('Discord invite link')
+                     .setRequired(false)
+                )
+                .addStringOption(o =>
+                    o.setName('roblox_link')
+                     .setDescription('Roblox group link')
+                     .setRequired(false)
+                )
+                .addChannelOption(o =>
+                    o.setName('public_channel')
+                     .setDescription('Channel to announce the alliance')
+                     .setRequired(false)
+                )
         )
         .addSubcommand(sub =>
             sub.setName('remove')
-                .addStringOption(o => o.setName('group').setRequired(true))
+                .setDescription('Remove an alliance')
+                .addStringOption(o =>
+                    o.setName('group')
+                     .setDescription('Alliance group name')
+                     .setRequired(true)
+                )
         )
         .addSubcommand(sub =>
             sub.setName('list')
+                .setDescription('Update the alliance list')
         )
         .toJSON()
 );
@@ -69,7 +127,10 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
     await rest.put(
-        Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+        Routes.applicationGuildCommands(
+            process.env.CLIENT_ID,
+            process.env.GUILD_ID
+        ),
         { body: commands }
     );
     console.log('✅ Commands deployed');
