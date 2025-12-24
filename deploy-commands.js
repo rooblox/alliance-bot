@@ -127,38 +127,41 @@ commands.push(
 commands.push(
     new SlashCommandBuilder()
         .setName('staff')
-        .setDescription('Staff commands')
+        .setDescription('Staff management')
         .addSubcommand(sub =>
             sub.setName('discipline')
-            .setDescription('Give a staff strike')
-            .addUserOption(o =>
-                o.setName('user')
-                 .setDescription('Staff member to strike')
-                 .setRequired(true)
-            )
-            .addStringOption(o =>
-                o.setName('reason')
-                 .setDescription('Reason for strike')
-                 .setRequired(true)
-            )
+                .setDescription('Add a strike to a staff member')
+                .addUserOption(o => 
+                    o.setName('user')
+                     .setDescription('The staff member to discipline')
+                     .setRequired(true)
+                )
+                .addStringOption(o =>
+                    o.setName('reason')
+                     .setDescription('Reason for strike')
+                     .setRequired(true)
+                )
         )
         .addSubcommand(sub =>
             sub.setName('strikes')
-            .setDescription('View all staff strikes')
+                .setDescription('View all staff strikes')
         )
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON()
 );
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
-    await rest.put(
-        Routes.applicationGuildCommands(
-            process.env.CLIENT_ID,
-            process.env.GUILD_ID
-        ),
-        { body: commands }
-    );
-    console.log('✅ Commands deployed');
+    try {
+        await rest.put(
+            Routes.applicationGuildCommands(
+                process.env.CLIENT_ID,
+                process.env.GUILD_ID
+            ),
+            { body: commands }
+        );
+        console.log('✅ Commands deployed');
+    } catch (err) {
+        console.error('❌ Error deploying commands:', err);
+    }
 })();
