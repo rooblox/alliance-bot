@@ -25,13 +25,6 @@ function normalizeUrl(url) {
 }
 
 /* =======================
-   STAFF STRIKES
-======================= */
-let strikes = fs.existsSync('./staffStrikes.json')
-    ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
-    : [];
-
-/* =======================
    ALLIANCES (MEMORY)
 ======================= */
 let alliances = [];
@@ -39,6 +32,7 @@ let allianceListMessageId = null;
 
 /* =======================
    UPDATE ALLIANCE LIST
+   (NO ROLE PING)
 ======================= */
 async function updateAllianceList(channel) {
     if (!channel) return;
@@ -57,7 +51,7 @@ async function updateAllianceList(channel) {
                 value:
                     `**Our Reps:** ${a.ourReps}\n` +
                     `**Their Reps:** ${a.theirReps}\n` +
-                    `**Discord:** ${a.dcLink}\n` +
+                    `**Discord:** ${a.dcLink || 'N/A'}\n` +
                     `**Roblox:** ${a.robloxLink || 'N/A'}`
             });
         });
@@ -71,16 +65,7 @@ async function updateAllianceList(channel) {
         } catch {}
     }
 
-    const prRole = channel.guild.roles.cache.find(
-        r => r.name === '[PR] | Staff Role'
-    );
-
-    const msg = await channel.send({
-        content: prRole ? `<@&${prRole.id}>` : null,
-        embeds: [embed],
-        allowedMentions: { roles: prRole ? [prRole.id] : [] }
-    });
-
+    const msg = await channel.send({ embeds: [embed] });
     allianceListMessageId = msg.id;
 }
 
@@ -96,9 +81,7 @@ client.once('ready', () => {
 ======================= */
 client.on('messageCreate', async (message) => {
     if (!message.guild && !message.author.bot) {
-        const logChannel = client.channels.cache.find(
-            c => c.name === 'dm-logs'
-        );
+        const logChannel = client.channels.cache.find(c => c.name === 'dm-logs');
         if (!logChannel) return;
 
         const embed = new EmbedBuilder()
@@ -148,10 +131,7 @@ client.on('interactionCreate', async (interaction) => {
 
             try { await user.send({ embeds: [embed] }); } catch {}
 
-            const logChannel = guild.channels.cache.find(
-                c => c.name === 'dm-logs'
-            );
-
+            const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
             if (logChannel) {
                 logChannel.send({
                     embeds: [
@@ -171,7 +151,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.editReply('✅ DM sent.');
         }
 
-        /* ===== REP REQUEST ===== */
+        /* ===== REP REQUEST (PR ROLE PING ONLY HERE) ===== */
         if (commandName === 'rep') {
             await interaction.deferReply({ ephemeral: true });
 
@@ -180,11 +160,12 @@ client.on('interactionCreate', async (interaction) => {
             const robloxLink = options.getString('roblox_link');
             const allianceLink = options.getString('alliance_link');
 
-            const channel = guild.channels.cache.find(
-                c => c.name === 'request-new-rep'
+            const channel = guild.channels.cache.find(c => c.name === 'request-new-rep');
+            if (!channel) return interaction.editReply('❌ Channel not found.');
+
+            const prRole = guild.roles.cache.find(
+                r => r.name === '[PR] | Staff Role'
             );
-            if (!channel)
-                return interaction.editReply('❌ Channel not found.');
 
             const embed = new EmbedBuilder()
                 .setTitle('📥 New Rep Request')
@@ -198,7 +179,12 @@ client.on('interactionCreate', async (interaction) => {
                     { name: 'Date', value: new Date().toLocaleString() }
                 );
 
-            await channel.send({ embeds: [embed] });
+            await channel.send({
+                content: prRole ? `<@&${prRole.id}>` : null,
+                embeds: [embed],
+                allowedMentions: { roles: prRole ? [prRole.id] : [] }
+            });
+
             return interaction.editReply('✅ Rep request sent.');
         }
 
@@ -216,12 +202,8 @@ client.on('interactionCreate', async (interaction) => {
                 const group = options.getString('group');
                 const ourReps = options.getString('our_reps');
                 const theirReps = options.getString('their_reps');
-
-                const dcLink = normalizeUrl(
-                    options.getString('discord_link')
-                );
-
-                const robloxLink = options.getString('roblox_link');
+                const dcLink = normalizeUrl(options.getString('discord_link'));
+                const robloxLink = normalizeUrl(options.getString('roblox_link'));
                 const publicChannel = options.getChannel('public_channel');
 
                 alliances.push({
@@ -266,14 +248,10 @@ ${ourReps.split(/,| /).filter(Boolean).map(r => `• ${r}`).join('\n')}
 
     } catch (err) {
         console.error(err);
-
         if (interaction.deferred || interaction.replied) {
             return interaction.editReply('❌ An error occurred.');
         } else {
-            return interaction.reply({
-                content: '❌ An error occurred.',
-                ephemeral: true
-            });
+            return interaction.reply({ content: '❌ An error occurred.', ephemeral: true });
         }
     }
 });
