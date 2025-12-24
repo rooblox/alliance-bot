@@ -85,11 +85,13 @@ client.on('interactionCreate', async interaction => {
             await interaction.deferReply({ ephemeral: true });
 
             try {
-                // Hybrid: get member if in guild, otherwise user object
-                let staffMember = options.getMember('user');
-                const staffUser = options.getUser('user');
-                if (!staffMember && !staffUser)
-                    return interaction.editReply({ content: '❌ Staff member not found.' });
+                const staffUser = options.getUser('user'); // always works
+                let staffMember = null;
+                if (guild) {
+                    try {
+                        staffMember = await guild.members.fetch(staffUser.id).catch(() => null);
+                    } catch { staffMember = null; }
+                }
                 const target = staffMember || staffUser;
 
                 const reason = options.getString('reason') || 'No reason provided';
@@ -107,16 +109,16 @@ client.on('interactionCreate', async interaction => {
                 try {
                     const dmEmbed = new EmbedBuilder()
                         .setTitle('Strike Notice')
-                        .setDescription(`Greetings, <@${target.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
+                        .setDescription(`Greetings, <@${staffUser.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
                         .setColor('Red')
                         .setTimestamp();
-                    await target.send({ embeds: [dmEmbed] });
+                    await staffUser.send({ embeds: [dmEmbed] });
                 } catch {
-                    console.warn(`Could not DM ${target.tag || target.username}`);
+                    console.warn(`Could not DM ${staffUser.tag}`);
                 }
 
                 // Log to staff-discipline channel
-                const mention = staffMember ? `<@${staffMember.id}>` : target.username;
+                const mention = staffMember ? `<@${staffMember.id}>` : staffUser.username;
                 const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
                 if (logChannel) {
                     const logEmbed = new EmbedBuilder()
