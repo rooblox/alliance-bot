@@ -125,29 +125,45 @@ commands.push(
 
 /* ===== /staff ===== */
 commands.push(
-    new SlashCommandBuilder()
-        .setName('staff')
-        .setDescription('Staff management')
-        .addSubcommand(sub =>
-            sub.setName('discipline')
-                .setDescription('Add a strike to a staff member')
-                .addUserOption(o => 
-                    o.setName('user')
-                     .setDescription('The staff member to discipline')
-                     .setRequired(true)
-                )
-                .addStringOption(o =>
-                    o.setName('reason')
-                     .setDescription('Reason for strike')
-                     .setRequired(true)
-                )
+  new SlashCommandBuilder()
+    .setName('staff')
+    .setDescription('Staff management')
+    .addSubcommand(sub =>
+      sub.setName('discipline')
+        .setDescription('Add or remove a strike from a staff member')
+        .addStringOption(o =>
+          o.setName('action')
+            .setDescription('Add or remove a strike')
+            .setRequired(true)
+            .addChoices(
+                 { name: 'Add', value: 'add' },
+                 { name: 'Remove', value: 'remove' }
+            )
+
         )
-        .addSubcommand(sub =>
-            sub.setName('strikes')
-                .setDescription('View all staff strikes')
+        .addUserOption(o =>
+          o.setName('user')
+            .setDescription('The staff member')
+            .setRequired(true)
         )
-        .toJSON()
+        .addStringOption(o =>
+          o.setName('reason')
+            .setDescription('Reason (required for add; optional for remove)')
+            .setRequired(false)
+        )
+    )
+    .addSubcommand(sub =>
+      sub.setName('strikes')
+        .setDescription('View strikes for a staff member')
+        .addUserOption(o =>
+          o.setName('user')
+            .setDescription('The staff member to view')
+            .setRequired(true)
+        )
+    )
+    .toJSON()
 );
+
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
