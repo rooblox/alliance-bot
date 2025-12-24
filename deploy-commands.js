@@ -123,6 +123,33 @@ commands.push(
         .toJSON()
 );
 
+/* ===== /staff ===== */
+commands.push(
+    new SlashCommandBuilder()
+        .setName('staff')
+        .setDescription('Staff commands')
+        .addSubcommand(sub =>
+            sub.setName('discipline')
+            .setDescription('Give a staff strike')
+            .addUserOption(o =>
+                o.setName('user')
+                 .setDescription('Staff member to strike')
+                 .setRequired(true)
+            )
+            .addStringOption(o =>
+                o.setName('reason')
+                 .setDescription('Reason for strike')
+                 .setRequired(true)
+            )
+        )
+        .addSubcommand(sub =>
+            sub.setName('strikes')
+            .setDescription('View all staff strikes')
+        )
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON()
+);
+
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
