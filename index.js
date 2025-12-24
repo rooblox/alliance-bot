@@ -85,33 +85,33 @@ client.on('interactionCreate', async interaction => {
             await interaction.deferReply({ ephemeral: true });
 
             try {
-                const staffUser = options.getUser('user');
-                if (!staffUser) return interaction.editReply({ content: '❌ User not found.' });
+                const staffMember = options.getMember('user');
+                if (!staffMember) return interaction.editReply({ content: '❌ Staff member not found in this server.' });
 
                 const reason = options.getString('reason') || 'No reason provided';
 
                 // Initialize strike count
-                if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
-                staffStrikes[staffUser.id]++;
+                if (!staffStrikes[staffMember.id]) staffStrikes[staffMember.id] = 0;
+                staffStrikes[staffMember.id]++;
                 try {
                     fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
                 } catch (err) {
                     console.error('Error writing staffStrikes.json:', err);
                 }
 
-                const strikeCount = staffStrikes[staffUser.id];
+                const strikeCount = staffStrikes[staffMember.id];
                 const ordinal = ['1st','2nd','3rd'][strikeCount-1] || `${strikeCount}th`;
 
                 // DM staff member (safe)
                 try {
                     const dmEmbed = new EmbedBuilder()
                         .setTitle('Strike Notice')
-                        .setDescription(`Greetings, <@${staffUser.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
+                        .setDescription(`Greetings, <@${staffMember.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
                         .setColor('Red')
                         .setTimestamp();
-                    await staffUser.send({ embeds: [dmEmbed] });
+                    await staffMember.send({ embeds: [dmEmbed] });
                 } catch {
-                    console.warn(`Could not DM ${staffUser.tag}`);
+                    console.warn(`Could not DM ${staffMember.user.tag}`);
                 }
 
                 // Log to staff-discipline channel
@@ -121,7 +121,7 @@ client.on('interactionCreate', async interaction => {
                         const logEmbed = new EmbedBuilder()
                             .setTitle('📌 Staff Discipline')
                             .addFields(
-                                { name: 'Staff Member', value: `<@${staffUser.id}>` },
+                                { name: 'Staff Member', value: `<@${staffMember.id}>` },
                                 { name: 'Strike Number', value: `${strikeCount}` },
                                 { name: 'Reason', value: reason },
                                 { name: 'Given By', value: `<@${interaction.user.id}>` },
@@ -135,7 +135,7 @@ client.on('interactionCreate', async interaction => {
                     console.warn('Could not log staff discipline:', err);
                 }
 
-                return interaction.editReply({ content: `✅ Added strike to ${staffUser.tag} (${ordinal})` });
+                return interaction.editReply({ content: `✅ Added strike to ${staffMember.user.tag} (${ordinal})` });
 
             } catch (err) {
                 console.error('Staff discipline error:', err);
