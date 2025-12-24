@@ -1,20 +1,13 @@
 require('dotenv').config();
-const {
-    Client,
-    GatewayIntentBits,
-    Partials,
-    EmbedBuilder,
-    PermissionFlagsBits,
-    ActivityType
-} = require('discord.js');
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, PermissionFlagsBits, ActivityType } = require('discord.js');
 const fs = require('fs');
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.DirectMessages
     ],
     partials: [Partials.Channel, Partials.Message]
 });
@@ -26,9 +19,7 @@ client.once('ready', () => {
 
 /* ================== STORAGE ================== */
 let alliances = [];
-let staffStrikes = fs.existsSync('./staffStrikes.json')
-    ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
-    : {};
+let staffStrikes = fs.existsSync('./staffStrikes.json') ? JSON.parse(fs.readFileSync('./staffStrikes.json')) : {};
 
 /* ================== INTERACTIONS ================== */
 client.on('interactionCreate', async interaction => {
@@ -112,22 +103,27 @@ client.on('interactionCreate', async interaction => {
             }
 
             // Log to staff-discipline channel
-            const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
-            if (logChannel) {
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📌 Staff Discipline')
-                    .addFields(
-                        { name: 'Staff Member', value: `<@${staffUser.id}>` },
-                        { name: 'Strike Number', value: `${strikeCount}` },
-                        { name: 'Reason', value: reason },
-                        { name: 'Given By', value: `<@${interaction.user.id}>` },
-                        { name: 'Date', value: new Date().toLocaleString() }
-                    )
-                    .setColor('Red')
-                    .setTimestamp();
-                logChannel.send({ embeds: [logEmbed] });
+            try {
+                const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
+                if (logChannel) {
+                    const logEmbed = new EmbedBuilder()
+                        .setTitle('📌 Staff Discipline')
+                        .addFields(
+                            { name: 'Staff Member', value: `<@${staffUser.id}>` },
+                            { name: 'Strike Number', value: `${strikeCount}` },
+                            { name: 'Reason', value: reason },
+                            { name: 'Given By', value: `<@${interaction.user.id}>` },
+                            { name: 'Date', value: new Date().toLocaleString() }
+                        )
+                        .setColor('Red')
+                        .setTimestamp();
+                    logChannel.send({ embeds: [logEmbed] });
+                }
+            } catch(err) {
+                console.warn('Failed to log staff discipline:', err);
             }
 
+            // Respond to interaction
             return interaction.editReply({ content: `✅ Added strike to ${staffUser.tag} (${ordinal})` });
         }
 
@@ -172,6 +168,7 @@ client.on('interactionCreate', async interaction => {
     /* ========= /ALLIANCE ========= */
     if (commandName === 'alliance') {
         const sub = options.getSubcommand();
+        await interaction.deferReply({ ephemeral: true });
 
         if (sub === 'add') {
             const group = options.getString('group');
@@ -183,24 +180,25 @@ client.on('interactionCreate', async interaction => {
 
             alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
 
-            const listChannel = guild.channels.cache.find(c => c.name === 'alliances-list');
-            if (listChannel) {
-                const embed = new EmbedBuilder()
-                    .setTitle('🌐 New Alliance Added')
-                    .addFields(
-                        { name: 'Group', value: group },
-                        { name: 'Our Reps', value: ourReps },
-                        { name: 'Their Reps', value: theirReps },
-                        { name: 'Discord Link', value: dcLink || 'None' },
-                        { name: 'Roblox Link', value: robloxLink || 'None' }
-                    )
-                    .setTimestamp();
-                await listChannel.send({ embeds: [embed] });
-            }
+            try {
+                const listChannel = guild.channels.cache.find(c => c.name === 'alliances-list');
+                if (listChannel) {
+                    const embed = new EmbedBuilder()
+                        .setTitle('🌐 New Alliance Added')
+                        .addFields(
+                            { name: 'Group', value: group },
+                            { name: 'Our Reps', value: ourReps },
+                            { name: 'Their Reps', value: theirReps },
+                            { name: 'Discord Link', value: dcLink || 'None' },
+                            { name: 'Roblox Link', value: robloxLink || 'None' }
+                        )
+                        .setTimestamp();
+                    await listChannel.send({ embeds: [embed] });
+                }
 
-            if (publicChannel && publicChannel.isTextBased()) {
-                const repsList = ourReps.split(/,| /).filter(Boolean).map(r => `• @${r}`).join('\n');
-                const welcomeMessage = `:tada: Welcome New Alliance! | Kavi Café x ${group} :tada:
+                if (publicChannel && publicChannel.isTextBased()) {
+                    const repsList = ourReps.split(/,| /).filter(Boolean).map(r => `• @${r}`).join('\n');
+                    const welcomeMessage = `:tada: Welcome New Alliance! | Kavi Café x ${group} :tada:
 
 We’re thrilled to officially welcome your community into an alliance with Kavi Café! :star2:
 This partnership is all about mutual growth, support, and fun — and we can’t wait to see what we’ll achieve together.
@@ -216,42 +214,38 @@ We’re so excited to be working together and building a strong, positive relati
 
 :coffee::sparkles: Here’s to a successful partnership between Kavi Café and ${group}! :sparkles::coffee:`;
 
-                await publicChannel.send(welcomeMessage);
+                    await publicChannel.send(welcomeMessage);
+                }
+            } catch(err) {
+                console.error('Error sending alliance messages:', err);
             }
 
-            return interaction.reply({ content: '✅ Alliance added.', ephemeral: true });
+            return interaction.editReply({ content: '✅ Alliance added.' });
         }
 
         if (sub === 'remove') {
             const group = options.getString('group');
             alliances = alliances.filter(a => a.group !== group);
-            return interaction.reply({ content: `✅ Alliance **${group}** removed.`, ephemeral: true });
+            return interaction.editReply({ content: `✅ Alliance **${group}** removed.` });
         }
 
         if (sub === 'list') {
             const listChannel = guild.channels.cache.find(c => c.name === 'alliances-list');
-            if (!listChannel) return interaction.reply({ content: '❌ alliances-list channel missing.', ephemeral: true });
+            if (!listChannel) return interaction.editReply({ content: '❌ alliances-list channel missing.' });
 
-            const embed = new EmbedBuilder()
-                .setTitle('🌐 Alliance List')
-                .setTimestamp();
-
+            const embed = new EmbedBuilder().setTitle('🌐 Alliance List').setTimestamp();
             if (!alliances.length) embed.setDescription('No alliances yet.');
             else {
                 alliances.forEach(a => {
                     embed.addFields({
                         name: a.group,
-                        value:
-                            `Our Reps: ${a.ourReps}\n` +
-                            `Their Reps: ${a.theirReps}\n` +
-                            `Discord: ${a.dcLink || 'None'}\n` +
-                            `Roblox: ${a.robloxLink || 'None'}`
+                        value: `Our Reps: ${a.ourReps}\nTheir Reps: ${a.theirReps}\nDiscord: ${a.dcLink || 'None'}\nRoblox: ${a.robloxLink || 'None'}`
                     });
                 });
             }
 
             await listChannel.send({ embeds: [embed] });
-            return interaction.reply({ content: '✅ Alliance list posted.', ephemeral: true });
+            return interaction.editReply({ content: '✅ Alliance list posted.' });
         }
     }
 });
