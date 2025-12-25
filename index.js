@@ -56,7 +56,6 @@ client.on('interactionCreate', async interaction => {
         const messageText = options.getString('message');
         const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
 
-        // Send embed to user
         const dmEmbed = new EmbedBuilder()
             .setTitle('📩 Staff Message')
             .setDescription(messageText)
@@ -64,7 +63,6 @@ client.on('interactionCreate', async interaction => {
             .setTimestamp();
         await user.send({ embeds: [dmEmbed] }).catch(() => null);
 
-        // Log message to dm-logs
         if (logChannel) {
             const logEmbed = new EmbedBuilder()
                 .setTitle('📩 Staff DM Sent')
@@ -82,7 +80,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ DM sent.', ephemeral: true });
     }
 
-    /* ========= /STAFF DISCIPLINE ========= */
+    /* ========= /STAFF ========= */
     if (commandName === 'staff') {
         const sub = options.getSubcommand();
         const staffUser = options.getUser('user');
@@ -96,16 +94,18 @@ client.on('interactionCreate', async interaction => {
             const strikeCount = staffStrikes[staffUser.id];
             const ordinal = ['1st','2nd','3rd'][strikeCount-1] || `${strikeCount}th`;
 
-            // DM staff member
-            const dmChannel = await staffUser.createDM();
             const dmEmbed = new EmbedBuilder()
                 .setTitle('Strike Notice')
-                .setDescription(`Greetings, <@${staffUser.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
+                .setDescription(
+                    `Greetings, <@${staffUser.id}>\n\n` +
+                    `You have received a strike at Kavià Café.\n` +
+                    `This is your ${ordinal} strike.\n\n` +
+                    `🗒️ Reason: ${reason}`
+                )
                 .setColor('Red')
                 .setTimestamp();
-            await dmChannel.send({ embeds: [dmEmbed] }).catch(() => null);
+            await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
 
-            // Log to staff-discipline channel
             const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
             if (logChannel) {
                 const logEmbed = new EmbedBuilder()
@@ -122,7 +122,7 @@ client.on('interactionCreate', async interaction => {
                 logChannel.send({ embeds: [logEmbed] });
             }
 
-            return interaction.reply({ content: `✅ Added strike to ${staffUser.tag} (${ordinal})`, ephemeral: true });
+            return interaction.reply({ content: `✅ Added strike to ${staffUser.tag}`, ephemeral: true });
         }
 
         if (sub === 'strikes') {
@@ -152,7 +152,6 @@ client.on('interactionCreate', async interaction => {
                 { name: 'Discord Link', value: dc },
                 { name: 'Roblox Link', value: roblox },
                 { name: 'Alliance Link', value: alliance },
-                { name: '📌 Instructions', value: 'When adding yourself to an alliance, make sure you give yourself the correct alliance roles. This is very important.' },
                 { name: 'Date', value: new Date().toLocaleString() }
             )
             .setTimestamp();
@@ -169,54 +168,41 @@ client.on('interactionCreate', async interaction => {
             const group = options.getString('group');
             const ourReps = options.getString('our_reps');
             const theirReps = options.getString('their_reps');
-            const dcLink =
-                options.getString('discord_link') ||
-                options.getString('dc_link');
-            const robloxLink =
-                options.getString('roblox_link') ||
-                options.getString('roblox');
+            const dcLink = options.getString('discord_link') || options.getString('dc_link');
+            const robloxLink = options.getString('roblox_link') || options.getString('roblox');
             const publicChannel = options.getChannel('public_channel');
 
             alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
 
-            const listChannel = guild.channels.cache.find(c => c.name === 'alliances-list');
-            if (listChannel) {
-                const embed = new EmbedBuilder()
-                    .setTitle('🌐 New Alliance Added')
-                    .addFields(
-                        { name: 'Group', value: group },
-                        { name: 'Our Reps', value: ourReps },
-                        { name: 'Their Reps', value: theirReps },
-                        { name: 'Discord Link', value: dcLink || 'None' },
-                        { name: 'Roblox Link', value: robloxLink || 'None' }
-                    )
-                    .setTimestamp();
-
-                await listChannel.send({ embeds: [embed] });
-            }
-
-            if (publicChannel && publicChannel.isTextBased()) {
-                const repsList = ourReps.split(/,| /).filter(Boolean).map(r => `• @${r}`).join('\n');
-                const welcomeMessage = `:tada: Welcome New Alliance! | Kavi Café x ${group} :tada:
-
-We’re thrilled to officially welcome your community into an alliance with Kavi Café! :star2:
-This partnership is all about mutual growth, support, and fun — and we can’t wait to see what we’ll achieve together.
-
-:speech_balloon: Questions & Support
-If you have any questions, concerns, or suggestions, this is the perfect place to share them. We value communication and want to make sure both of our communities get the most out of this partnership.
-
-:busts_in_silhouette: Please meet your Kavi Café representatives:
-${repsList}
-
-:handshake: Looking Ahead
-We’re so excited to be working together and building a strong, positive relationship between our communities. Expect fun events, cross-community opportunities, and lasting connections.
-
-:coffee::sparkles: Here’s to a successful partnership between Kavi Café and ${group}! :sparkles::coffee:`;
-
-                await publicChannel.send(welcomeMessage);
-            }
-
             return interaction.reply({ content: '✅ Alliance added.', ephemeral: true });
+        }
+
+        /* ===== /ALLIANCE EDIT (ADDED) ===== */
+        if (sub === 'edit') {
+            const group = options.getString('group');
+            const alliance = alliances.find(a => a.group === group);
+
+            if (!alliance) {
+                return interaction.reply({
+                    content: `❌ Alliance **${group}** not found.`,
+                    ephemeral: true
+                });
+            }
+
+            const ourReps = options.getString('our_reps');
+            const theirReps = options.getString('their_reps');
+            const dcLink = options.getString('discord_link') || options.getString('dc_link');
+            const robloxLink = options.getString('roblox_link') || options.getString('roblox');
+
+            if (ourReps !== null) alliance.ourReps = ourReps;
+            if (theirReps !== null) alliance.theirReps = theirReps;
+            if (dcLink !== null) alliance.dcLink = dcLink;
+            if (robloxLink !== null) alliance.robloxLink = robloxLink;
+
+            return interaction.reply({
+                content: `✅ Alliance **${group}** updated successfully.`,
+                ephemeral: true
+            });
         }
 
         if (sub === 'remove') {
