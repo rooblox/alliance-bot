@@ -83,18 +83,17 @@ client.on('interactionCreate', async interaction => {
     /* ========= /STAFF ========= */
     if (commandName === 'staff') {
         const sub = options.getSubcommand();
-        const staffUser = options.getUser('user'); // Make sure your command option is named 'user'
+        const staffUser = options.getUser('user');
         const reason = options.getString('reason') || 'No reason provided';
+        const action = options.getString('action'); // 'add' or 'remove'
+
+        if (!staffUser) return interaction.reply({ content: '❌ No user specified.', ephemeral: true });
+
+        if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
+
+        const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
 
         if (sub === 'discipline') {
-            if (!staffUser) return interaction.reply({ content: '❌ No user specified.', ephemeral: true });
-
-            const action = options.getString('action'); // 'add' or 'remove'
-
-            if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
-
-            const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
-
             if (action === 'add') {
                 staffStrikes[staffUser.id]++;
                 fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
@@ -224,17 +223,24 @@ client.on('interactionCreate', async interaction => {
 
             alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
 
-            // Welcome message with format
+            // Optional welcome message with exact format provided
             if (publicChannel && publicChannel.isTextBased()) {
-                const welcome = `:tada: **Welcome New Alliance! | Kavi Café x ${group}** :tada:
+                const welcome = `:tada: Welcome New Alliance! | Kavi Café x ${group} :tada:
 
 We’re thrilled to officially welcome your community into an alliance with Kavi Café! :star2:
+This partnership is all about mutual growth, support, and fun — and we can’t wait to see what we’ll achieve together.
 
-:busts_in_silhouette: Kavi Café representatives:
+:speech_balloon: Questions & Support
+If you have any questions, concerns, or suggestions, this is the perfect place to share them. We value communication and want to make sure both of our communities get the most out of this partnership.
+
+:busts_in_silhouette: Please meet your Kavi Café representatives:
 ${ourReps.split(/,| /).filter(Boolean).map(u => `• ${u}`).join('\n')}
 
-:handshake: We look forward to a strong partnership!
-`;
+:handshake: Looking Ahead
+We’re so excited to be working together and building a strong, positive relationship between our communities. Expect fun events, cross-community opportunities, and lasting connections.
+
+:coffee::sparkles: Here’s to a successful partnership between Kavi Café and ${group}! :sparkles::coffee:`;
+
                 await publicChannel.send(welcome);
             }
 
