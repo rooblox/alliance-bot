@@ -80,44 +80,45 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ DM sent.', ephemeral: true });
     }
 
-    /* ========= /STAFF (FIXED) ========= */
+    /* ========= /STAFF ========= */
     if (commandName === 'staff') {
-        await interaction.deferReply({ ephemeral: true });
-
         const sub = options.getSubcommand();
-        const target = options.getUser('user');
+        const staffUser = options.getUser('user');
         const action = options.getString('action');
         const reason = options.getString('reason') || 'No reason provided';
 
-        const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
+        if (sub === 'discipline') {
+            await interaction.deferReply({ ephemeral: true });
 
-        if (!staffStrikes[target.id]) staffStrikes[target.id] = [];
+            if (!staffUser) return interaction.editReply('❌ No user specified.');
 
-        const getOrdinal = (n) => {
-            const s = ["th","st","nd","rd"];
-            const v = n % 100;
-            return n + (s[(v-20)%10] || s[v] || s[0]);
-        };
+            if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = [];
 
-        /* ===== ADD STRIKE ===== */
-        if (sub === 'discipline' && action === 'add') {
-            staffStrikes[target.id].push({
-                reason,
-                staff: interaction.user.id,
-                timestamp: Date.now()
-            });
+            const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
 
-            fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
+            const ordinal = n => {
+                const s = ['th','st','nd','rd'];
+                const v = n % 100;
+                return n + (s[(v-20)%10] || s[v] || s[0]);
+            };
 
-            const count = staffStrikes[target.id].length;
-            const ordinal = getOrdinal(count);
+            /* ===== ADD STRIKE ===== */
+            if (action === 'add') {
+                staffStrikes[staffUser.id].push({
+                    reason,
+                    staff: interaction.user.id,
+                    time: Date.now()
+                });
+                fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
 
-            const dmEmbed = new EmbedBuilder()
-                .setTitle('Strike Notice')
-                .setDescription(
-`Greetings, <@${target.id}>
+                const count = staffStrikes[staffUser.id].length;
 
-I'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your ${ordinal} strike.
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('Strike Notice')
+                    .setDescription(
+`Greetings, <@${staffUser.id}>
+
+I'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your ${ordinal(count)} strike.
 
 🗒️ Reason: ${reason}
 
@@ -126,43 +127,41 @@ If you feel like this was false or inaccurate please open a ticket.
 Regards,
 Staff Team
 Kavià || Public Relations team`
-                )
-                .setColor('Red')
-                .setTimestamp();
-
-            await target.send({ embeds: [dmEmbed] }).catch(() => null);
-
-            if (logChannel) {
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📌 Staff Discipline Log')
-                    .addFields(
-                        { name: 'Member', value: `<@${target.id}>` },
-                        { name: 'Action', value: 'Added Strike' },
-                        { name: 'Reason', value: reason },
-                        { name: 'Staff', value: `<@${interaction.user.id}>` }
                     )
                     .setColor('Red')
                     .setTimestamp();
 
-                logChannel.send({ embeds: [logEmbed] });
+                await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
+
+                if (logChannel) {
+                    const logEmbed = new EmbedBuilder()
+                        .setTitle('📌 Staff Discipline Log')
+                        .addFields(
+                            { name: 'Member', value: `<@${staffUser.id}>` },
+                            { name: 'Action', value: 'Added Strike' },
+                            { name: 'Reason', value: reason },
+                            { name: 'Staff', value: `<@${interaction.user.id}>` }
+                        )
+                        .setTimestamp();
+                    logChannel.send({ embeds: [logEmbed] });
+                }
+
+                return interaction.editReply(`✅ Added strike to ${staffUser.tag}`);
             }
 
-            return interaction.editReply(`✅ Strike added to ${target.tag} (${ordinal})`);
-        }
+            /* ===== REMOVE STRIKE ===== */
+            if (action === 'remove') {
+                if (!staffStrikes[staffUser.id].length) {
+                    return interaction.editReply('❌ User has no strikes.');
+                }
 
-        /* ===== REMOVE STRIKE ===== */
-        if (sub === 'discipline' && action === 'remove') {
-            if (!staffStrikes[target.id].length) {
-                return interaction.editReply('❌ That user has no strikes.');
-            }
+                staffStrikes[staffUser.id].pop();
+                fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
 
-            staffStrikes[target.id].pop();
-            fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
-
-            const dmEmbed = new EmbedBuilder()
-                .setTitle('Notice of Removal')
-                .setDescription(
-`Greetings, <@${target.id}>
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('Notice of Removal')
+                    .setDescription(
+`Greetings, <@${staffUser.id}>
 
 Your Strike has been removed at Kavià Cafe.
 
@@ -171,42 +170,36 @@ Your Strike has been removed at Kavià Cafe.
 Regards,
 Staff Team
 Kavià || Public Relations team`
-                )
-                .setColor('Green')
-                .setTimestamp();
-
-            await target.send({ embeds: [dmEmbed] }).catch(() => null);
-
-            if (logChannel) {
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📌 Staff Discipline Log')
-                    .addFields(
-                        { name: 'Member', value: `<@${target.id}>` },
-                        { name: 'Action', value: 'Removed Strike' },
-                        { name: 'Reason', value: reason },
-                        { name: 'Staff', value: `<@${interaction.user.id}>` }
                     )
                     .setColor('Green')
                     .setTimestamp();
 
-                logChannel.send({ embeds: [logEmbed] });
+                await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
+
+                if (logChannel) {
+                    const logEmbed = new EmbedBuilder()
+                        .setTitle('📌 Staff Discipline Log')
+                        .addFields(
+                            { name: 'Member', value: `<@${staffUser.id}>` },
+                            { name: 'Action', value: 'Removed Strike' },
+                            { name: 'Reason', value: reason },
+                            { name: 'Staff', value: `<@${interaction.user.id}>` }
+                        )
+                        .setTimestamp();
+                    logChannel.send({ embeds: [logEmbed] });
+                }
+
+                return interaction.editReply(`✅ Removed strike from ${staffUser.tag}`);
             }
 
-            return interaction.editReply(`✅ Strike removed from ${target.tag}`);
+            return interaction.editReply('❌ Invalid action.');
         }
 
-        /* ===== VIEW STRIKES ===== */
         if (sub === 'strikes') {
-            const strikes = staffStrikes[target.id] || [];
-            if (!strikes.length) return interaction.editReply('No strikes found.');
-
-            const text = strikes
-                .map((s, i) =>
-                    `**${i + 1}.** ${s.reason} — <@${s.staff}> (${new Date(s.timestamp).toLocaleString()})`
-                )
-                .join('\n');
-
-            return interaction.editReply(text);
+            const strikesText = Object.entries(staffStrikes)
+                .map(([id, strikes]) => `<@${id}>: ${strikes.length}`)
+                .join('\n') || 'No strikes recorded.';
+            return interaction.reply({ content: strikesText, ephemeral: true });
         }
     }
 
@@ -247,48 +240,61 @@ Kavià || Public Relations team`
             const theirReps = options.getString('their_reps');
             const dcLink = options.getString('discord_link') || options.getString('dc_link');
             const robloxLink = options.getString('roblox_link') || options.getString('roblox');
+            const publicChannel = options.getChannel('public_channel');
 
             alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
+
             return interaction.reply({ content: '✅ Alliance added.', ephemeral: true });
         }
 
         if (sub === 'edit') {
             const group = options.getString('group');
             const alliance = alliances.find(a => a.group === group);
-            if (!alliance) return interaction.reply({ content: '❌ Alliance not found.', ephemeral: true });
+
+            if (!alliance) return interaction.reply({ content: `❌ Alliance **${group}** not found.`, ephemeral: true });
 
             const ourReps = options.getString('our_reps');
             const theirReps = options.getString('their_reps');
-            const dcLink = options.getString('discord_link');
-            const robloxLink = options.getString('roblox_link');
+            const dcLink = options.getString('discord_link') || options.getString('dc_link');
+            const robloxLink = options.getString('roblox_link') || options.getString('roblox');
 
             if (ourReps !== null) alliance.ourReps = ourReps;
             if (theirReps !== null) alliance.theirReps = theirReps;
             if (dcLink !== null) alliance.dcLink = dcLink;
             if (robloxLink !== null) alliance.robloxLink = robloxLink;
 
-            return interaction.reply({ content: '✅ Alliance updated.', ephemeral: true });
+            return interaction.reply({ content: `✅ Alliance **${group}** updated successfully.`, ephemeral: true });
         }
 
         if (sub === 'remove') {
             const group = options.getString('group');
             alliances = alliances.filter(a => a.group !== group);
-            return interaction.reply({ content: '✅ Alliance removed.', ephemeral: true });
+            return interaction.reply({ content: `✅ Alliance **${group}** removed.`, ephemeral: true });
         }
 
         if (sub === 'list') {
             const listChannel = guild.channels.cache.find(c => c.name === 'alliances-list');
             if (!listChannel) return interaction.reply({ content: '❌ alliances-list channel missing.', ephemeral: true });
 
-            const embed = new EmbedBuilder().setTitle('🌐 Alliance List');
-            alliances.forEach(a => {
-                embed.addFields({
-                    name: a.group,
-                    value: `Our Reps: ${a.ourReps}\nTheir Reps: ${a.theirReps}\nDiscord: ${a.dcLink}\nRoblox: ${a.robloxLink}`
-                });
-            });
+            const embed = new EmbedBuilder()
+                .setTitle('🌐 Alliance List')
+                .setTimestamp();
 
-            listChannel.send({ embeds: [embed] });
+            if (!alliances.length) embed.setDescription('No alliances yet.');
+            else {
+                alliances.forEach(a => {
+                    embed.addFields({
+                        name: a.group,
+                        value:
+                            `Our Reps: ${a.ourReps}\n` +
+                            `Their Reps: ${a.theirReps}\n` +
+                            `Discord: ${a.dcLink || 'None'}\n` +
+                            `Roblox: ${a.robloxLink || 'None'}`
+                    });
+                });
+            }
+
+            await listChannel.send({ embeds: [embed] });
             return interaction.reply({ content: '✅ Alliance list posted.', ephemeral: true });
         }
     }
