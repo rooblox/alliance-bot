@@ -80,14 +80,113 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ DM sent.', ephemeral: true });
     }
 
-    /* ========= /STAFF ========= */
-    if (commandName === 'staff') {
-        const sub = options.getSubcommand();
-        const staffUser = options.getUser('user');
-        const reason = options.getString('reason') || 'No reason provided';
+   /* ========= /STAFF ========= */
+if (commandName === 'staff') {
+    const sub = options.getSubcommand();
+    const staffUser = options.getUser('user');
+    const reason = options.getString('reason') || 'No reason provided';
+    const action = options.getString('action');
 
-        // ===== Keep your existing staff discipline code unchanged =====
+    if (sub === 'discipline') {
+        if (!staffUser) return interaction.reply({ content: '❌ No user specified.', ephemeral: true });
+        if (!action) return interaction.reply({ content: '❌ No action specified.', ephemeral: true });
+
+        const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
+
+        if (action === 'add') {
+            if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
+            staffStrikes[staffUser.id]++;
+            fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
+
+            const strikeCount = staffStrikes[staffUser.id];
+            const ordinal = ['1st','2nd','3rd'][strikeCount-1] || `${strikeCount}th`;
+
+            // DM user
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('Strike Notice')
+                .setDescription(
+                    `Greetings, <@${staffUser.id}>\n\n` +
+                    `I'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café. This is your ${ordinal} strike.\n\n` +
+                    `🗒️ Reason: ${reason}\n\n` +
+                    `If you feel like this was false or inaccurate please open a ticket.\n\n` +
+                    `Regards,\nStaff Team\nKavià || Public Relations team`
+                )
+                .setColor('Red')
+                .setTimestamp();
+            await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
+
+            // Log to channel
+            if (logChannel) {
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('📌 Staff Discipline Log')
+                    .addFields(
+                        { name: 'Member', value: `<@${staffUser.id}>` },
+                        { name: 'Action', value: 'Added Strike' },
+                        { name: 'Reason', value: reason },
+                        { name: 'Staff', value: `<@${interaction.user.id}>` }
+                    )
+                    .setColor('Red')
+                    .setTimestamp();
+                logChannel.send({ embeds: [logEmbed] });
+            }
+
+            return interaction.reply({ content: `✅ Added strike to ${staffUser.tag} (${ordinal})`, ephemeral: true });
+        }
+
+        if (action === 'remove') {
+            if (!staffStrikes[staffUser.id] || staffStrikes[staffUser.id] === 0) {
+                return interaction.reply({ content: `❌ ${staffUser.tag} has no strikes to remove.`, ephemeral: true });
+            }
+            staffStrikes[staffUser.id]--;
+            fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
+
+            // DM user
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('Notice of Removal')
+                .setDescription(
+                    `Greetings, <@${staffUser.id}>\n\n` +
+                    `Your Strike has been removed at Kavià Café.\n\n` +
+                    `🗒️ Reason: ${reason}\n\n` +
+                    `Regards,\nStaff Team\nKavià || Public Relations team`
+                )
+                .setColor('Green')
+                .setTimestamp();
+            await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
+
+            // Log to channel
+            if (logChannel) {
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('📌 Staff Discipline Log')
+                    .addFields(
+                        { name: 'Member', value: `<@${staffUser.id}>` },
+                        { name: 'Action', value: 'Removed Strike' },
+                        { name: 'Reason', value: reason },
+                        { name: 'Staff', value: `<@${interaction.user.id}>` }
+                    )
+                    .setColor('Green')
+                    .setTimestamp();
+                logChannel.send({ embeds: [logEmbed] });
+            }
+
+            return interaction.reply({ content: `✅ Removed a strike from ${staffUser.tag}`, ephemeral: true });
+        }
+
+        if (action === 'kick') {
+            const memberObj = guild.members.cache.get(staffUser.id);
+            if (memberObj) await memberObj.kick(reason);
+            return interaction.reply({ content: `✅ ${staffUser.tag} has been kicked.`, ephemeral: true });
+        }
     }
+
+    if (sub === 'strikes') {
+        const target = options.getUser('user');
+        if (!target) return interaction.reply({ content: '❌ No user specified.', ephemeral: true });
+
+        const strikeCount = staffStrikes[target.id] || 0;
+        return interaction.reply({ content: `${target.tag} has ${strikeCount} strike(s).`, ephemeral: true });
+    }
+}
+
 
     /* ========= /REP REQUEST ========= */
     if (commandName === 'rep' && options.getSubcommand() === 'request') {
