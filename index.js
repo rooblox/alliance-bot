@@ -24,7 +24,7 @@ client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-/* ================== ALLIANCE STORAGE ================== */
+/* ================== STORAGE ================== */
 let alliances = [];
 let staffStrikes = fs.existsSync('./staffStrikes.json')
     ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
@@ -41,8 +41,10 @@ client.on('interactionCreate', async interaction => {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({ content: '❌ Admin only.', ephemeral: true });
         }
+
         const text = options.getString('text');
         client.user.setActivity(text, { type: ActivityType.Playing });
+
         return interaction.reply({ content: '✅ Status updated.', ephemeral: true });
     }
 
@@ -56,80 +58,107 @@ client.on('interactionCreate', async interaction => {
         const messageText = options.getString('message');
         const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
 
-        // Send embed to user
         const dmEmbed = new EmbedBuilder()
             .setTitle('📩 Staff Message')
             .setDescription(messageText)
             .setColor('Blue')
             .setTimestamp();
+
         await user.send({ embeds: [dmEmbed] }).catch(() => null);
 
-        // Log message to dm-logs
         if (logChannel) {
             const logEmbed = new EmbedBuilder()
                 .setTitle('📩 Staff DM Sent')
                 .addFields(
                     { name: 'To', value: `<@${user.id}>` },
                     { name: 'Message', value: messageText },
-                    { name: 'Sent By', value: `<@${interaction.user.id}>` },
-                    { name: 'Date', value: new Date().toLocaleString() }
+                    { name: 'Sent By', value: `<@${interaction.user.id}>` }
                 )
                 .setColor('Blue')
                 .setTimestamp();
+
             logChannel.send({ embeds: [logEmbed] });
         }
 
         return interaction.reply({ content: '✅ DM sent.', ephemeral: true });
     }
 
-    /* ========= /STAFF DISCIPLINE ========= */
+    /* ========= /STAFF ========= */
     if (commandName === 'staff') {
-        const sub = options.getSubcommand();
-        const staffUser = options.getUser('user');
-        const reason = options.getString('reason') || 'No reason provided';
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({ content: '❌ Admin only.', ephemeral: true });
+        }
 
+        const sub = options.getSubcommand();
+
+        /* ----- /staff discipline ----- */
         if (sub === 'discipline') {
+            const staffUser = options.getUser('user');
+            const action = options.getString('action');
+            const reason = options.getString('reason') || 'No reason provided';
+
+            if (!staffUser) {
+                return interaction.reply({ content: '❌ No user provided.', ephemeral: true });
+            }
+
             if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
-            staffStrikes[staffUser.id]++;
+
+            if (action === 'add') {
+                staffStrikes[staffUser.id]++;
+            } else if (action === 'remove') {
+                staffStrikes[staffUser.id] = Math.max(0, staffStrikes[staffUser.id] - 1);
+            }
+
             fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
 
             const strikeCount = staffStrikes[staffUser.id];
-            const ordinal = ['1st','2nd','3rd'][strikeCount-1] || `${strikeCount}th`;
 
-            // DM staff member
-            const dmChannel = await staffUser.createDM();
-            const dmEmbed = new EmbedBuilder()
-                .setTitle('Strike Notice')
-                .setDescription(`Greetings, <@${staffUser.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\nThis is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
-                .setColor('Red')
-                .setTimestamp();
-            await dmChannel.send({ embeds: [dmEmbed] }).catch(() => null);
+            // DM user
+            if (action === 'add') {
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle('⚠️ Strike Notice')
+                    .setDescription(
+                        `You have received a strike.\n\n🗒️ Reason: ${reason}\n📌 Total Strikes: ${strikeCount}`
+                    )
+                    .setColor('Red')
+                    .setTimestamp();
 
-            // Log to staff-discipline channel
+                await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
+            }
+
+            // Log
             const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
             if (logChannel) {
                 const logEmbed = new EmbedBuilder()
                     .setTitle('📌 Staff Discipline')
                     .addFields(
                         { name: 'Staff Member', value: `<@${staffUser.id}>` },
-                        { name: 'Strike Number', value: `${strikeCount}` },
+                        { name: 'Action', value: action.toUpperCase() },
+                        { name: 'Strikes', value: `${strikeCount}` },
                         { name: 'Reason', value: reason },
-                        { name: 'Given By', value: `<@${interaction.user.id}>` },
-                        { name: 'Date', value: new Date().toLocaleString() }
+                        { name: 'Given By', value: `<@${interaction.user.id}>` }
                     )
                     .setColor('Red')
                     .setTimestamp();
+
                 logChannel.send({ embeds: [logEmbed] });
             }
 
-            return interaction.reply({ content: `✅ Added strike to ${staffUser.tag} (${ordinal})`, ephemeral: true });
+            return interaction.reply({
+                content: `✅ ${action === 'add' ? 'Added' : 'Removed'} strike for ${staffUser.tag}. Total: ${strikeCount}`,
+                ephemeral: true
+            });
         }
 
+        /* ----- /staff strikes ----- */
         if (sub === 'strikes') {
-            const strikesText = Object.entries(staffStrikes)
-                .map(([id, strikes]) => `<@${id}>: ${strikes}`)
-                .join('\n') || 'No strikes recorded.';
-            return interaction.reply({ content: strikesText, ephemeral: true });
+            const target = options.getUser('user');
+            const strikes = staffStrikes[target.id] || 0;
+
+            return interaction.reply({
+                content: `📌 ${target.tag} has **${strikes}** strike(s).`,
+                ephemeral: true
+            });
         }
     }
 
@@ -151,9 +180,7 @@ client.on('interactionCreate', async interaction => {
                 { name: 'Number of Reps', value: `${num}` },
                 { name: 'Discord Link', value: dc },
                 { name: 'Roblox Link', value: roblox },
-                { name: 'Alliance Link', value: alliance },
-                { name: '📌 Instructions', value: 'When adding yourself to an alliance, make sure you give yourself the correct alliance roles. This is very important.' },
-                { name: 'Date', value: new Date().toLocaleString() }
+                { name: 'Alliance Link', value: alliance }
             )
             .setTimestamp();
 
@@ -169,12 +196,8 @@ client.on('interactionCreate', async interaction => {
             const group = options.getString('group');
             const ourReps = options.getString('our_reps');
             const theirReps = options.getString('their_reps');
-            const dcLink =
-                options.getString('discord_link') ||
-                options.getString('dc_link');
-            const robloxLink =
-                options.getString('roblox_link') ||
-                options.getString('roblox');
+            const dcLink = options.getString('discord_link');
+            const robloxLink = options.getString('roblox_link');
             const publicChannel = options.getChannel('public_channel');
 
             alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
@@ -186,34 +209,15 @@ client.on('interactionCreate', async interaction => {
                     .addFields(
                         { name: 'Group', value: group },
                         { name: 'Our Reps', value: ourReps },
-                        { name: 'Their Reps', value: theirReps },
-                        { name: 'Discord Link', value: dcLink || 'None' },
-                        { name: 'Roblox Link', value: robloxLink || 'None' }
+                        { name: 'Their Reps', value: theirReps }
                     )
                     .setTimestamp();
 
-                await listChannel.send({ embeds: [embed] });
+                listChannel.send({ embeds: [embed] });
             }
 
-            if (publicChannel && publicChannel.isTextBased()) {
-                const repsList = ourReps.split(/,| /).filter(Boolean).map(r => `• @${r}`).join('\n');
-                const welcomeMessage = `:tada: Welcome New Alliance! | Kavi Café x ${group} :tada:
-
-We’re thrilled to officially welcome your community into an alliance with Kavi Café! :star2:
-This partnership is all about mutual growth, support, and fun — and we can’t wait to see what we’ll achieve together.
-
-:speech_balloon: Questions & Support
-If you have any questions, concerns, or suggestions, this is the perfect place to share them. We value communication and want to make sure both of our communities get the most out of this partnership.
-
-:busts_in_silhouette: Please meet your Kavi Café representatives:
-${repsList}
-
-:handshake: Looking Ahead
-We’re so excited to be working together and building a strong, positive relationship between our communities. Expect fun events, cross-community opportunities, and lasting connections.
-
-:coffee::sparkles: Here’s to a successful partnership between Kavi Café and ${group}! :sparkles::coffee:`;
-
-                await publicChannel.send(welcomeMessage);
+            if (publicChannel?.isTextBased()) {
+                await publicChannel.send(`🎉 Welcome **${group}** to our alliance!`);
             }
 
             return interaction.reply({ content: '✅ Alliance added.', ephemeral: true });
@@ -223,32 +227,6 @@ We’re so excited to be working together and building a strong, positive relati
             const group = options.getString('group');
             alliances = alliances.filter(a => a.group !== group);
             return interaction.reply({ content: `✅ Alliance **${group}** removed.`, ephemeral: true });
-        }
-
-        if (sub === 'list') {
-            const listChannel = guild.channels.cache.find(c => c.name === 'alliances-list');
-            if (!listChannel) return interaction.reply({ content: '❌ alliances-list channel missing.', ephemeral: true });
-
-            const embed = new EmbedBuilder()
-                .setTitle('🌐 Alliance List')
-                .setTimestamp();
-
-            if (!alliances.length) embed.setDescription('No alliances yet.');
-            else {
-                alliances.forEach(a => {
-                    embed.addFields({
-                        name: a.group,
-                        value:
-                            `Our Reps: ${a.ourReps}\n` +
-                            `Their Reps: ${a.theirReps}\n` +
-                            `Discord: ${a.dcLink || 'None'}\n` +
-                            `Roblox: ${a.robloxLink || 'None'}`
-                    });
-                });
-            }
-
-            await listChannel.send({ embeds: [embed] });
-            return interaction.reply({ content: '✅ Alliance list posted.', ephemeral: true });
         }
     }
 });
@@ -263,8 +241,7 @@ client.on('messageCreate', async message => {
             .setTitle('📩 DM Received')
             .addFields(
                 { name: 'From', value: `<@${message.author.id}>` },
-                { name: 'Message', value: message.content || '(No text)' },
-                { name: 'Date', value: new Date().toLocaleString() }
+                { name: 'Message', value: message.content || '(No text)' }
             )
             .setColor('Blue')
             .setTimestamp();
