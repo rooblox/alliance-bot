@@ -1,289 +1,317 @@
 require('dotenv').config();
+const {
+    Client,
+    GatewayIntentBits,
+    Partials,
+    EmbedBuilder,
+    PermissionFlagsBits,
+    ActivityType
+} = require('discord.js');
 const fs = require('fs');
-const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.MessageContent
     ],
-    partials: [Partials.Channel],
+    partials: [Partials.Channel, Partials.Message]
 });
 
-// ===== Strikes data =====
-let strikes = fs.existsSync('./staffStrikes.json')
-    ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
-    : [];
-
-// ===== In-memory alliances =====
-let alliances = [];
-let allianceListMessageId = null;
-
-// ===== Helper: update alliance list message =====
-async function updateAllianceList(channel) {
-    if (!channel) return;
-    let content = '';
-
-    if (!alliances.length) {
-        content = '🌐 No alliances found.';
-    } else {
-        alliances.forEach(a => {
-            content += `---------------------------\n`;
-            content += `Group: ${a.group}\n`;
-            content += `Our Reps: ${a.ourReps}\n`;
-            content += `Their Reps: ${a.theirReps}\n`;
-            content += `Discord Link: ${a.dcLink || 'N/A'}\n`;
-            content += `Roblox Link: ${a.robloxLink || 'N/A'}\n`;
-            content += `---------------------------\n\n`;
-        });
-    }
-
-    if (allianceListMessageId) {
-        try {
-            const msg = await channel.messages.fetch(allianceListMessageId);
-            await msg.edit(content);
-        } catch {
-            const msg = await channel.send(content);
-            allianceListMessageId = msg.id;
-        }
-    } else {
-        const msg = await channel.send(content);
-        allianceListMessageId = msg.id;
-    }
-}
-
-// ===== Ready =====
+/* ================== READY ================== */
 client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// ===== DM Logging =====
-client.on('messageCreate', async (message) => {
+/* ================== ALLIANCE STORAGE ================== */
+let alliances = [];
+let staffStrikes = fs.existsSync('./staffStrikes.json')
+    ? JSON.parse(fs.readFileSync('./staffStrikes.json'))
+    : {};
+
+/* ================== INTERACTIONS ================== */
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const { commandName, options, guild } = interaction;
+
+    /* ========= /STATUS ========= */
+    if (commandName === 'status') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({ content: '❌ Admin only.', ephemeral: true });
+        }
+        const text = options.getString('text');
+        client.user.setActivity(text, { type: ActivityType.Playing });
+        return interaction.reply({ content: '✅ Status updated.', ephemeral: true });
+    }
+
+    /* ========= /DM ========= */
+    if (commandName === 'dm') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({ content: '❌ Admin only.', ephemeral: true });
+        }
+
+        const user = options.getUser('user');
+        const messageText = options.getString('message');
+        const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
+
+        const dmEmbed = new EmbedBuilder()
+            .setTitle('📩 Staff Message')
+            .setDescription(messageText)
+            .setColor('Blue')
+            .setTimestamp();
+        await user.send({ embeds: [dmEmbed] }).catch(() => null);
+
+        if (logChannel) {
+            const logEmbed = new EmbedBuilder()
+                .setTitle('📩 Staff DM Sent')
+                .addFields(
+                    { name: 'To', value: `<@${user.id}>` },
+                    { name: 'Message', value: messageText },
+                    { name: 'Sent By', value: `<@${interaction.user.id}>` },
+                    { name: 'Date', value: new Date().toLocaleString() }
+                )
+                .setColor('Blue')
+                .setTimestamp();
+            logChannel.send({ embeds: [logEmbed] });
+        }
+
+        return interaction.reply({ content: '✅ DM sent.', ephemeral: true });
+    }
+
+    /* ========= /STAFF (FIXED) ========= */
+    if (commandName === 'staff') {
+        await interaction.deferReply({ ephemeral: true });
+
+        const sub = options.getSubcommand();
+        const target = options.getUser('user');
+        const action = options.getString('action');
+        const reason = options.getString('reason') || 'No reason provided';
+
+        const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
+
+        if (!staffStrikes[target.id]) staffStrikes[target.id] = [];
+
+        const getOrdinal = (n) => {
+            const s = ["th","st","nd","rd"];
+            const v = n % 100;
+            return n + (s[(v-20)%10] || s[v] || s[0]);
+        };
+
+        /* ===== ADD STRIKE ===== */
+        if (sub === 'discipline' && action === 'add') {
+            staffStrikes[target.id].push({
+                reason,
+                staff: interaction.user.id,
+                timestamp: Date.now()
+            });
+
+            fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
+
+            const count = staffStrikes[target.id].length;
+            const ordinal = getOrdinal(count);
+
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('Strike Notice')
+                .setDescription(
+`Greetings, <@${target.id}>
+
+I'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Cafe. This is your ${ordinal} strike.
+
+🗒️ Reason: ${reason}
+
+If you feel like this was false or inaccurate please open a ticket.
+
+Regards,
+Staff Team
+Kavià || Public Relations team`
+                )
+                .setColor('Red')
+                .setTimestamp();
+
+            await target.send({ embeds: [dmEmbed] }).catch(() => null);
+
+            if (logChannel) {
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('📌 Staff Discipline Log')
+                    .addFields(
+                        { name: 'Member', value: `<@${target.id}>` },
+                        { name: 'Action', value: 'Added Strike' },
+                        { name: 'Reason', value: reason },
+                        { name: 'Staff', value: `<@${interaction.user.id}>` }
+                    )
+                    .setColor('Red')
+                    .setTimestamp();
+
+                logChannel.send({ embeds: [logEmbed] });
+            }
+
+            return interaction.editReply(`✅ Strike added to ${target.tag} (${ordinal})`);
+        }
+
+        /* ===== REMOVE STRIKE ===== */
+        if (sub === 'discipline' && action === 'remove') {
+            if (!staffStrikes[target.id].length) {
+                return interaction.editReply('❌ That user has no strikes.');
+            }
+
+            staffStrikes[target.id].pop();
+            fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
+
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('Notice of Removal')
+                .setDescription(
+`Greetings, <@${target.id}>
+
+Your Strike has been removed at Kavià Cafe.
+
+🗒️ Reason: ${reason}
+
+Regards,
+Staff Team
+Kavià || Public Relations team`
+                )
+                .setColor('Green')
+                .setTimestamp();
+
+            await target.send({ embeds: [dmEmbed] }).catch(() => null);
+
+            if (logChannel) {
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('📌 Staff Discipline Log')
+                    .addFields(
+                        { name: 'Member', value: `<@${target.id}>` },
+                        { name: 'Action', value: 'Removed Strike' },
+                        { name: 'Reason', value: reason },
+                        { name: 'Staff', value: `<@${interaction.user.id}>` }
+                    )
+                    .setColor('Green')
+                    .setTimestamp();
+
+                logChannel.send({ embeds: [logEmbed] });
+            }
+
+            return interaction.editReply(`✅ Strike removed from ${target.tag}`);
+        }
+
+        /* ===== VIEW STRIKES ===== */
+        if (sub === 'strikes') {
+            const strikes = staffStrikes[target.id] || [];
+            if (!strikes.length) return interaction.editReply('No strikes found.');
+
+            const text = strikes
+                .map((s, i) =>
+                    `**${i + 1}.** ${s.reason} — <@${s.staff}> (${new Date(s.timestamp).toLocaleString()})`
+                )
+                .join('\n');
+
+            return interaction.editReply(text);
+        }
+    }
+
+    /* ========= /REP REQUEST ========= */
+    if (commandName === 'rep' && options.getSubcommand() === 'request') {
+        const num = options.getInteger('num_reps');
+        const dc = options.getString('discord_link');
+        const roblox = options.getString('roblox_link');
+        const alliance = options.getString('alliance_link');
+
+        const channel = guild.channels.cache.find(c => c.name === 'rep-requests');
+        const prRole = guild.roles.cache.find(r => r.name === '[PR] | Staff Role');
+        if (!channel) return interaction.reply({ content: '❌ rep-requests channel missing.', ephemeral: true });
+
+        const embed = new EmbedBuilder()
+            .setTitle('📥 New Rep Request')
+            .addFields(
+                { name: 'Requested By', value: `<@${interaction.user.id}>` },
+                { name: 'Number of Reps', value: `${num}` },
+                { name: 'Discord Link', value: dc },
+                { name: 'Roblox Link', value: roblox },
+                { name: 'Alliance Link', value: alliance },
+                { name: 'Date', value: new Date().toLocaleString() }
+            )
+            .setTimestamp();
+
+        await channel.send({ content: prRole ? `<@&${prRole.id}>` : '', embeds: [embed] });
+        return interaction.reply({ content: '✅ Rep request sent.', ephemeral: true });
+    }
+
+    /* ========= /ALLIANCE ========= */
+    if (commandName === 'alliance') {
+        const sub = options.getSubcommand();
+
+        if (sub === 'add') {
+            const group = options.getString('group');
+            const ourReps = options.getString('our_reps');
+            const theirReps = options.getString('their_reps');
+            const dcLink = options.getString('discord_link') || options.getString('dc_link');
+            const robloxLink = options.getString('roblox_link') || options.getString('roblox');
+
+            alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
+            return interaction.reply({ content: '✅ Alliance added.', ephemeral: true });
+        }
+
+        if (sub === 'edit') {
+            const group = options.getString('group');
+            const alliance = alliances.find(a => a.group === group);
+            if (!alliance) return interaction.reply({ content: '❌ Alliance not found.', ephemeral: true });
+
+            const ourReps = options.getString('our_reps');
+            const theirReps = options.getString('their_reps');
+            const dcLink = options.getString('discord_link');
+            const robloxLink = options.getString('roblox_link');
+
+            if (ourReps !== null) alliance.ourReps = ourReps;
+            if (theirReps !== null) alliance.theirReps = theirReps;
+            if (dcLink !== null) alliance.dcLink = dcLink;
+            if (robloxLink !== null) alliance.robloxLink = robloxLink;
+
+            return interaction.reply({ content: '✅ Alliance updated.', ephemeral: true });
+        }
+
+        if (sub === 'remove') {
+            const group = options.getString('group');
+            alliances = alliances.filter(a => a.group !== group);
+            return interaction.reply({ content: '✅ Alliance removed.', ephemeral: true });
+        }
+
+        if (sub === 'list') {
+            const listChannel = guild.channels.cache.find(c => c.name === 'alliances-list');
+            if (!listChannel) return interaction.reply({ content: '❌ alliances-list channel missing.', ephemeral: true });
+
+            const embed = new EmbedBuilder().setTitle('🌐 Alliance List');
+            alliances.forEach(a => {
+                embed.addFields({
+                    name: a.group,
+                    value: `Our Reps: ${a.ourReps}\nTheir Reps: ${a.theirReps}\nDiscord: ${a.dcLink}\nRoblox: ${a.robloxLink}`
+                });
+            });
+
+            listChannel.send({ embeds: [embed] });
+            return interaction.reply({ content: '✅ Alliance list posted.', ephemeral: true });
+        }
+    }
+});
+
+/* ================== DM LOGGING ================== */
+client.on('messageCreate', async message => {
     if (!message.guild && !message.author.bot) {
         const logChannel = client.channels.cache.find(c => c.name === 'dm-logs');
         if (!logChannel) return;
 
         const embed = new EmbedBuilder()
             .setTitle('📩 DM Received')
-            .setColor('Blue')
             .addFields(
                 { name: 'From', value: `<@${message.author.id}>` },
-                { name: 'Message', value: message.content },
-                { name: 'Received At', value: new Date().toLocaleString() }
-            );
+                { name: 'Message', value: message.content || '(No text)' },
+                { name: 'Date', value: new Date().toLocaleString() }
+            )
+            .setColor('Blue')
+            .setTimestamp();
 
         logChannel.send({ embeds: [embed] });
     }
 });
 
-// ===== Interactions =====
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-    const { commandName, options, member, guild } = interaction;
-
-    try {
-        // ===== /status =====
-        if (commandName === 'status') {
-            await interaction.deferReply({ ephemeral: true });
-            const statusText = options.getString('text') || 'Kavi Café';
-            await client.user.setPresence({
-                activities: [{ name: statusText, type: 0 }]
-            });
-            return interaction.editReply(`✅ Status updated: Playing ${statusText}`);
-        }
-
-        // ===== /dm =====
-        if (commandName === 'dm') {
-            await interaction.deferReply({ ephemeral: true });
-            const user = options.getUser('user');
-            const message = options.getString('message');
-
-            const dmEmbed = new EmbedBuilder()
-                .setTitle('📩 Staff Message')
-                .setDescription(message)
-                .setColor('Blue');
-
-            try { await user.send({ embeds: [dmEmbed] }); } catch {}
-
-            const logChannel = guild.channels.cache.find(c => c.name === 'dm-logs');
-            if (logChannel) {
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📩 Staff Message')
-                    .setColor('Blue')
-                    .addFields(
-                        { name: 'To', value: `<@${user.id}>` },
-                        { name: 'Message', value: message },
-                        { name: 'Sent By', value: `<@${member.user.id}>` },
-                        { name: 'Sent At', value: new Date().toLocaleString() }
-                    );
-                logChannel.send({ embeds: [logEmbed] });
-            }
-
-            return interaction.editReply('✅ DM sent');
-        }
-
-        // ===== /rep request =====
-        if (commandName === 'rep') {
-            const sub = options.getSubcommand();
-            if (sub === 'request') {
-                await interaction.deferReply({ ephemeral: true });
-                const numReps = options.getInteger('num_reps');
-                const discordLink = options.getString('discord_link');
-                const robloxLink = options.getString('roblox_link');
-                const allianceLink = options.getString('alliance_link');
-
-                const repChannel = guild.channels.cache.find(c => c.name === 'request-new-rep');
-                if (repChannel && repChannel.isTextBased()) {
-                    const embed = new EmbedBuilder()
-                        .setTitle('📥 New Rep Request')
-                        .setColor('Blue')
-                        .addFields(
-                            { name: 'Requested By', value: `<@${member.user.id}>` },
-                            { name: 'Number of Reps', value: numReps.toString() },
-                            { name: 'Discord Link', value: discordLink || 'N/A' },
-                            { name: 'Roblox Link', value: robloxLink || 'N/A' },
-                            { name: 'Alliance Link', value: allianceLink || 'N/A' },
-                            { name: '📌 Instructions', value: 'When adding yourself to an alliance, make sure you give yourself the correct alliance roles. This is very important.' },
-                            { name: 'Date', value: new Date().toLocaleString() }
-                        );
-                    await repChannel.send({ embeds: [embed] });
-                }
-
-                return interaction.editReply('✅ Rep request sent.');
-            }
-        }
-
-        // ===== /alliance =====
-        if (commandName === 'alliance') {
-            await interaction.deferReply({ ephemeral: true });
-            const sub = options.getSubcommand();
-            const listChannel = guild.channels.cache.find(c => c.name === 'alliances-list');
-
-            if (sub === 'add') {
-                const group = options.getString('group');
-                const ourReps = options.getString('our_reps');
-                const theirReps = options.getString('their_reps');
-                const dcLink = options.getString('discord') || 'N/A';
-                const robloxLink = options.getString('roblox') || 'N/A';
-                const publicChannel = options.getChannel('public_channel') || null;
-
-                alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
-
-                // Welcome message
-                if (publicChannel && publicChannel.isTextBased()) {
-                    const welcome = `:tada: **Welcome New Alliance! | Kavi Café x ${group}** :tada:
-
-We’re thrilled to officially welcome your community into an alliance with Kavi Café! :star2:
-
-:busts_in_silhouette: Kavi Café representatives:
-${ourReps.split(/,| /).filter(Boolean).map(u => `• ${u}`).join('\n')}
-
-:handshake: We look forward to a strong partnership!
-`;
-                    await publicChannel.send(welcome);
-                }
-
-                if (listChannel) await updateAllianceList(listChannel);
-
-                return interaction.editReply(`✅ Alliance **${group}** added.`);
-            }
-
-            if (sub === 'remove') {
-                const groupName = options.getString('group');
-                const index = alliances.findIndex(a => a.group.toLowerCase() === groupName.toLowerCase());
-                if (index === -1) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
-                alliances.splice(index, 1);
-
-                if (listChannel) await updateAllianceList(listChannel);
-
-                return interaction.editReply(`✅ Alliance "${groupName}" removed.`);
-            }
-
-            if (sub === 'edit') {
-                const groupName = options.getString('group');
-                const alliance = alliances.find(a => a.group.toLowerCase() === groupName.toLowerCase());
-                if (!alliance) return interaction.editReply(`❌ Alliance "${groupName}" not found.`);
-
-                const newGroup = options.getString('new_group');
-                const newOur = options.getString('our_reps');
-                const newTheir = options.getString('their_reps');
-                const newDiscord = options.getString('discord');
-                const newRoblox = options.getString('roblox');
-
-                if (newGroup) alliance.group = newGroup;
-                if (newOur) alliance.ourReps = newOur;
-                if (newTheir) alliance.theirReps = newTheir;
-                if (newDiscord) alliance.dcLink = newDiscord || 'N/A';
-                if (newRoblox) alliance.robloxLink = newRoblox || 'N/A';
-
-                if (listChannel) await updateAllianceList(listChannel);
-
-                return interaction.editReply(`✅ Alliance "${alliance.group}" updated.`);
-            }
-
-            if (sub === 'list') {
-                if (!listChannel) return interaction.editReply('❌ No channel named "alliances-list" found.');
-                await updateAllianceList(listChannel);
-                return interaction.editReply('✅ Alliance list updated in #alliances-list.');
-            }
-        }
-
-        // ===== /staff =====
-        if (commandName === 'staff') {
-            await interaction.deferReply({ ephemeral: true });
-            const sub = options.getSubcommand();
-
-            if (sub === 'discipline') {
-                const target = options.getUser('member');
-                const action = options.getString('action');
-                const reason = options.getString('reason');
-                const category = options.getString('category');
-
-                if (action === 'add') {
-                    strikes.push({ type: 'Strike', reason, staff: member.user.username, timestamp: new Date().toISOString() });
-                    fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
-                    return interaction.editReply(`✅ Strike added to ${target.username}`);
-                }
-
-                if (action === 'remove') {
-                    const index = strikes.findIndex(s => s.staff === target.username && s.reason === reason);
-                    if (index !== -1) strikes.splice(index, 1);
-                    fs.writeFileSync('./staffStrikes.json', JSON.stringify(strikes, null, 2));
-                    return interaction.editReply(`✅ Strike removed from ${target.username}`);
-                }
-
-                if (action === 'kick') {
-                    const memberObj = guild.members.cache.get(target.id);
-                    if (memberObj) await memberObj.kick(reason);
-                    return interaction.editReply(`✅ ${target.username} has been kicked.`);
-                }
-            }
-
-            if (sub === 'strikes') {
-                const target = options.getUser('member');
-                const userStrikes = strikes.filter(s => s.staff === target.username);
-                if (!userStrikes.length) return interaction.editReply(`${target.username} has no strikes.`);
-
-                let desc = '';
-                userStrikes.forEach((s, i) => {
-                    desc += `Strike ${i + 1} - ${s.reason} by ${s.staff} on ${new Date(s.timestamp).toLocaleString()}\n`;
-                });
-
-                return interaction.editReply({ content: desc });
-            }
-        }
-
-    } catch (err) {
-        console.error('❌ INTERACTION ERROR:', err);
-        if (interaction.deferred || interaction.replied) {
-            return interaction.editReply('❌ An error occurred while running this command.');
-        } else {
-            return interaction.reply({ content: '❌ An error occurred.', ephemeral: true });
-        }
-    }
-});
-
-// ===== Login =====
 client.login(process.env.TOKEN);
