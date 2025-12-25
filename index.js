@@ -91,7 +91,6 @@ client.on('interactionCreate', async interaction => {
 
         const sub = options.getSubcommand();
 
-        /* ----- /staff discipline ----- */
         if (sub === 'discipline') {
             const staffUser = options.getUser('user');
             const action = options.getString('action');
@@ -103,17 +102,12 @@ client.on('interactionCreate', async interaction => {
 
             if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
 
-            if (action === 'add') {
-                staffStrikes[staffUser.id]++;
-            } else if (action === 'remove') {
-                staffStrikes[staffUser.id] = Math.max(0, staffStrikes[staffUser.id] - 1);
-            }
+            if (action === 'add') staffStrikes[staffUser.id]++;
+            if (action === 'remove') staffStrikes[staffUser.id] = Math.max(0, staffStrikes[staffUser.id] - 1);
 
             fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
-
             const strikeCount = staffStrikes[staffUser.id];
 
-            // DM user
             if (action === 'add') {
                 const dmEmbed = new EmbedBuilder()
                     .setTitle('⚠️ Strike Notice')
@@ -126,7 +120,6 @@ client.on('interactionCreate', async interaction => {
                 await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
             }
 
-            // Log
             const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
             if (logChannel) {
                 const logEmbed = new EmbedBuilder()
@@ -150,7 +143,6 @@ client.on('interactionCreate', async interaction => {
             });
         }
 
-        /* ----- /staff strikes ----- */
         if (sub === 'strikes') {
             const target = options.getUser('user');
             const strikes = staffStrikes[target.id] || 0;
@@ -227,6 +219,34 @@ client.on('interactionCreate', async interaction => {
             const group = options.getString('group');
             alliances = alliances.filter(a => a.group !== group);
             return interaction.reply({ content: `✅ Alliance **${group}** removed.`, ephemeral: true });
+        }
+
+        /* ===== /ALLIANCE LIST (FULL DETAILS) ===== */
+        if (sub === 'list') {
+            if (alliances.length === 0) {
+                return interaction.reply({
+                    content: '📭 There are currently no alliances.',
+                    ephemeral: true
+                });
+            }
+
+            const embed = new EmbedBuilder()
+                .setTitle('🌐 Alliance List')
+                .setColor('Blue')
+                .setTimestamp();
+
+            alliances.forEach(a => {
+                embed.addFields({
+                    name: a.group,
+                    value:
+                        `**Our Reps:** ${a.ourReps}\n` +
+                        `**Their Reps:** ${a.theirReps}\n` +
+                        `**Discord:** ${a.dcLink || 'N/A'}\n` +
+                        `**Roblox:** ${a.robloxLink || 'N/A'}`
+                });
+            });
+
+            return interaction.reply({ embeds: [embed] });
         }
     }
 });
