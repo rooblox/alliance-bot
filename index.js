@@ -83,20 +83,19 @@ client.on('interactionCreate', async interaction => {
     /* ========= /STAFF ========= */
     if (commandName === 'staff') {
         const sub = options.getSubcommand();
-        const staffUser = options.getUser('user');
+        const staffUser = options.getUser('user'); // Make sure your command option is named 'user'
         const reason = options.getString('reason') || 'No reason provided';
-        const action = options.getString('action'); // add/remove
-
-        const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
-
-        if (!staffUser) {
-            return interaction.reply({ content: '❌ No user specified.', ephemeral: true });
-        }
 
         if (sub === 'discipline') {
+            if (!staffUser) return interaction.reply({ content: '❌ No user specified.', ephemeral: true });
+
+            const action = options.getString('action'); // 'add' or 'remove'
+
+            if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
+
+            const logChannel = guild.channels.cache.find(c => c.name === 'staff-discipline');
 
             if (action === 'add') {
-                if (!staffStrikes[staffUser.id]) staffStrikes[staffUser.id] = 0;
                 staffStrikes[staffUser.id]++;
                 fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
 
@@ -106,7 +105,14 @@ client.on('interactionCreate', async interaction => {
                 // DM user
                 const dmEmbed = new EmbedBuilder()
                     .setTitle('Strike Notice')
-                    .setDescription(`Greetings, <@${staffUser.id}>\n\nI'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café. This is your ${ordinal} strike.\n\n🗒️ Reason: ${reason}\n\nIf you feel like this was false or inaccurate please open a ticket.\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
+                    .setDescription(
+                        `Greetings, <@${staffUser.id}>\n\n` +
+                        `I'm unfortunately saddened to inform you that you have received a strike for your actions at Kavià Café.\n` +
+                        `This is your ${ordinal} strike.\n\n` +
+                        `🗒️ Reason: ${reason}\n\n` +
+                        `If you feel like this was false or inaccurate please open a ticket.\n\n` +
+                        `Regards,\nStaff Team\nKavià || Public Relations team`
+                    )
                     .setColor('Red')
                     .setTimestamp();
                 await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
@@ -130,37 +136,42 @@ client.on('interactionCreate', async interaction => {
             }
 
             if (action === 'remove') {
-                if (!staffStrikes[staffUser.id] || staffStrikes[staffUser.id] <= 0) {
-                    return interaction.reply({ content: `❌ ${staffUser.tag} has no strikes to remove.`, ephemeral: true });
-                }
+                if (staffStrikes[staffUser.id] > 0) {
+                    staffStrikes[staffUser.id]--;
+                    fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
 
-                staffStrikes[staffUser.id]--;
-                fs.writeFileSync('./staffStrikes.json', JSON.stringify(staffStrikes, null, 2));
-
-                // DM user
-                const dmEmbed = new EmbedBuilder()
-                    .setTitle('Notice of Removal')
-                    .setDescription(`Greetings, <@${staffUser.id}>\n\nYour Strike has been removed at Kavià Café.\n\n🗒️ Reason: ${reason}\n\nRegards,\nStaff Team\nKavià || Public Relations team`)
-                    .setColor('Green')
-                    .setTimestamp();
-                await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
-
-                // Log to channel
-                if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setTitle('📌 Staff Discipline Log')
-                        .addFields(
-                            { name: 'Member', value: `<@${staffUser.id}>` },
-                            { name: 'Action', value: 'Removed Strike' },
-                            { name: 'Reason', value: reason },
-                            { name: 'Staff', value: `<@${interaction.user.id}>` }
+                    // DM user
+                    const dmEmbed = new EmbedBuilder()
+                        .setTitle('Notice of Removal')
+                        .setDescription(
+                            `Greetings, <@${staffUser.id}>\n\n` +
+                            `Your Strike has been removed at Kavià Café.\n\n` +
+                            `🗒️ Reason: ${reason}\n\n` +
+                            `Regards,\nStaff Team\nKavià || Public Relations team`
                         )
                         .setColor('Green')
                         .setTimestamp();
-                    logChannel.send({ embeds: [logEmbed] });
-                }
+                    await staffUser.send({ embeds: [dmEmbed] }).catch(() => null);
 
-                return interaction.reply({ content: `✅ Removed strike from ${staffUser.tag}`, ephemeral: true });
+                    // Log to channel
+                    if (logChannel) {
+                        const logEmbed = new EmbedBuilder()
+                            .setTitle('📌 Staff Discipline Log')
+                            .addFields(
+                                { name: 'Member', value: `<@${staffUser.id}>` },
+                                { name: 'Action', value: 'Removed Strike' },
+                                { name: 'Reason', value: reason },
+                                { name: 'Staff', value: `<@${interaction.user.id}>` }
+                            )
+                            .setColor('Green')
+                            .setTimestamp();
+                        logChannel.send({ embeds: [logEmbed] });
+                    }
+
+                    return interaction.reply({ content: `✅ Removed strike from ${staffUser.tag}`, ephemeral: true });
+                } else {
+                    return interaction.reply({ content: `❌ ${staffUser.tag} has no strikes to remove.`, ephemeral: true });
+                }
             }
         }
 
@@ -213,34 +224,30 @@ client.on('interactionCreate', async interaction => {
 
             alliances.push({ group, ourReps, theirReps, dcLink, robloxLink });
 
-            // Welcome message format preserved
+            // Welcome message with format
             if (publicChannel && publicChannel.isTextBased()) {
-                const repsList = ourReps.split(/,| /).filter(Boolean).map(r => `• @${r}`).join('\n');
-                const welcomeMessage = `:tada: Welcome New Alliance! | Kavi Café x ${group} :tada:
+                const welcome = `:tada: **Welcome New Alliance! | Kavi Café x ${group}** :tada:
 
 We’re thrilled to officially welcome your community into an alliance with Kavi Café! :star2:
 
-:speech_balloon: Questions & Support
-If you have any questions, concerns, or suggestions, this is the perfect place to share them. We value communication and want to make sure both of our communities get the most out of this partnership.
+:busts_in_silhouette: Kavi Café representatives:
+${ourReps.split(/,| /).filter(Boolean).map(u => `• ${u}`).join('\n')}
 
-:busts_in_silhouette: Please meet your Kavi Café representatives:
-${repsList}
-
-:handshake: Looking Ahead
-We’re so excited to be working together and building a strong, positive relationship between our communities. Expect fun events, cross-community opportunities, and lasting connections.
-
-:coffee::sparkles: Here’s to a successful partnership between Kavi Café and ${group}! :sparkles::coffee:`;
-
-                await publicChannel.send(welcomeMessage);
+:handshake: We look forward to a strong partnership!
+`;
+                await publicChannel.send(welcome);
             }
 
-            return interaction.reply({ content: '✅ Alliance added.', ephemeral: true });
+            return interaction.reply({ content: `✅ Alliance **${group}** added.`, ephemeral: true });
         }
 
         if (sub === 'edit') {
             const group = options.getString('group');
             const alliance = alliances.find(a => a.group === group);
-            if (!alliance) return interaction.reply({ content: `❌ Alliance **${group}** not found.`, ephemeral: true });
+
+            if (!alliance) {
+                return interaction.reply({ content: `❌ Alliance **${group}** not found.`, ephemeral: true });
+            }
 
             const ourReps = options.getString('our_reps');
             const theirReps = options.getString('their_reps');
